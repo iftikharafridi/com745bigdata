@@ -1,0 +1,42 @@
+/* InfluxDB topic: quiz (Part F1). Answers checked against the real-server
+   outputs captured for the demonstrations. */
+window.COM745 = window.COM745 || {};
+COM745.QUIZ = COM745.QUIZ || {};
+COM745.QUIZ.influxdb = [
+  { q: 'In <code>room_env,room=lab_1,room_type=lab temp_c=19.6,co2_ppm=612i 1770022800000000000</code>, which parts are indexed?',
+    opts: ['temp_c and co2_ppm', 'room and room_type', 'All of them'], a: 1,
+    why: ['Those are fields: the measured values, not indexed.', 'Tags (between the measurement and the first space) are indexed and always strings.', 'Only tags and time are indexed; fields are not.'] },
+  { q: 'Two locations and two scientists all appear in the census points. How many series are there?',
+    opts: ['1: one measurement', '4: one per combination of tag values', '8: one per point'], a: 1,
+    why: ['A measurement can hold many series.', 'A series is the measurement plus one tag set. All four combinations occur (Demo 1).', 'Points that share tag values belong to the same series.'] },
+  { q: 'The field <code>co2_ppm</code> was first written as <code>612i</code>. What happens to <code>co2_ppm=650</code>?',
+    opts: ['It is stored as 650.0', 'It is rejected: field type conflict', 'It is converted to the integer 650'], a: 1,
+    why: ['InfluxDB does not convert types.', 'The first value fixed the type as integer; a float is refused (Demo 2).', 'No conversion happens; the point is dropped.'] },
+  { q: 'You write a point with the same series and timestamp as an existing one, but only <code>temp_c=21.0</code>. Result?',
+    opts: ['Two points', 'One point: temp_c becomes 21, other fields are kept', 'One point with only temp_c'], a: 1,
+    why: ['Series + timestamp identify a point.', 'The new fields overwrite, the others stay. There is no UPDATE statement.', 'Fields you did not send are kept.'] },
+  { q: "Why does <code>SELECT temp_c FROM room_env WHERE room = \"lab_1\"</code> return nothing?",
+    opts: ['lab_1 has no readings', 'Double quotes mean a name, so it compares room with a column called lab_1', 'WHERE cannot use tags'], a: 1,
+    why: ['It has 21.', 'Values take single quotes. InfluxDB returns no rows and no error.', 'Tags are exactly what WHERE is best at.'] },
+  { q: 'Which should be a <b>field</b>, not a tag?',
+    opts: ['The room a sensor is in', 'A unique ID for every reading', 'The type of room (lab or lecture)'], a: 1,
+    why: ['Few values, filtered and grouped on: a tag.', 'Unbounded values as a tag create a new series per point: high series cardinality.', 'Few values: a good tag.'] },
+  { q: "<code>SELECT max(co2_ppm), room FROM room_env</code> works, but <code>SELECT mean(co2_ppm), room FROM room_env</code> fails. Why?",
+    opts: ['mean() needs GROUP BY time()', 'max() is a selector that returns a real point; mean() has no single point to take the room from', 'room must be in double quotes'], a: 1,
+    why: ['mean() works without GROUP BY.', 'The error is "mixing aggregate and non-aggregate queries is not supported" (Demo 4).', 'Quoting does not change it.'] },
+  { q: 'lab_2 has no reading at 12:30. With <code>GROUP BY time(30m) fill(none)</code>, the 12:30 window…',
+    opts: ['shows no value', 'is left out of the result', 'shows 0'], a: 1,
+    why: ['That is fill(null), the default.', 'fill(none) drops empty windows.', 'That is fill(0).'] },
+  { q: 'How many rows does <code>moving_average(temp_c, 3)</code> give for nine readings of one room?',
+    opts: ['9', '7', '3'], a: 1,
+    why: ['The first value needs three readings.', 'The first two readings have no complete window (Demo 5).', 'It is a sliding window, not three blocks.'] },
+  { q: 'A 30-day retention policy is the DEFAULT. You load readings from 27 October 2017. What happens?',
+    opts: ['They are stored for 30 days', 'They are refused: older than the policy keeps', 'They go to autogen automatically'], a: 1,
+    why: ['Retention is measured against each point\'s timestamp, not the time you wrote it.', '"partial write: points beyond retention policy dropped" (Demo 6, Practical 7 T4).', 'Points go to the policy named, or the default.'] },
+  { q: 'Which DELETE is <b>not</b> allowed?',
+    opts: ["DELETE FROM room_env WHERE room = 'lab_2'", 'DELETE FROM room_env WHERE temp_c > 21', "DELETE WHERE time < '2026-01-01T00:00:00Z'"], a: 1,
+    why: ['Tags are allowed.', 'Fields are not indexed, so DELETE refuses them.', 'Time is allowed; without FROM it deletes from every measurement.'] },
+  { q: 'A start-up stores users, API keys and sensor readings. Where should the users go?',
+    opts: ['InfluxDB, with e-mail as a tag', 'A relational (or document) database', 'InfluxDB, with e-mail as a field'], a: 1,
+    why: ['Unbounded tag values, no uniqueness, no updates: a poor fit.', 'Users are updated by key and must be unique; readings go to the TSDB, linked by an ID (Practical 6).', 'Still no uniqueness or updates; users are not a time series.'] }
+];

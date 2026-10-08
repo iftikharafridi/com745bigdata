@@ -1,0 +1,35 @@
+/* MongoDB topic: quiz (Part F1). */
+window.COM745 = window.COM745 || {};
+COM745.QUIZ = COM745.QUIZ || {};
+COM745.QUIZ.mongodb = [
+  { q: 'What does MongoDB store on disk and send over the network?',
+    opts: ['JSON text', 'BSON (binary JSON)', 'XML'], a: 1,
+    why: ['You type JSON-like syntax, but it is converted.', 'BSON is faster to scan and adds types JSON lacks, such as Date and ObjectId.', 'XML is a different, more verbose format.'] },
+  { q: 'You run <code>use reports</code> and then <code>show dbs</code>. reports is not listed. Why?',
+    opts: ['use failed', 'A database only exists once something is written to it', 'show dbs lists only system databases'], a: 1,
+    why: ['use succeeded: it switched to reports.', 'Insert a document or create a collection and it appears.', 'It lists every database that holds data.'] },
+  { q: 'Which filter means <i>status is A AND qty is less than 30</i>?',
+    opts: ["{ $or: [ { status: 'A' }, { qty: { $lt: 30 } } ] }", "{ status: 'A', qty: { $lt: 30 } }", "{ status: 'A' } AND { qty: < 30 }"], a: 1,
+    why: ['$or matches either condition.', 'Conditions listed in one filter document are combined with AND.', 'Not valid syntax: operators are keys such as $lt.'] },
+  { q: 'Students keep registrations in an array. Which filter finds students registered on COM745?',
+    opts: ["{ registrations: 'COM745' }", "{ 'registrations.module': 'COM745' }", "{ registrations.module: 'COM745' }"], a: 1,
+    why: ['Each element is an object, not the string COM745, so nothing matches.', 'Dot notation reaches into the array elements; any match counts.', 'Without quotes, the dot is a JavaScript syntax error.'] },
+  { q: "What does <code>db.students.update({ _id: 1003 }, { status: 'Withdrawn' })</code> do?",
+    opts: ['Sets status, keeps the other fields', 'Replaces the whole document with { _id: 1003, status: "Withdrawn" }', 'Fails with an error'], a: 1,
+    why: ['That needs { $set: { status: … } }.', 'The legacy update() without operators is a replacement: the slide\'s O\'Parker trap.', 'updateOne would fail; the old update() does not.'] },
+  { q: 'An updateMany returns <code>matchedCount: 7, modifiedCount: 0</code>. What happened?',
+    opts: ['Nothing matched', 'Seven documents matched but already had the new value', 'The update failed'], a: 1,
+    why: ['matchedCount 7 says the filter found seven.', 'Setting a value to what it already is is not a modification.', 'A failure raises an error instead.'] },
+  { q: 'Which stage turns an array into one document per element?',
+    opts: ['$group', '$unwind', '$project'], a: 1,
+    why: ['$group does the opposite: many documents into one per key.', '$unwind, often followed by $group to count per element.', '$project chooses and computes fields.'] },
+  { q: 'In a pipeline, a $match placed AFTER $group behaves like which SQL clause?',
+    opts: ['WHERE', 'HAVING', 'ORDER BY'], a: 1,
+    why: ['A $match before $group is WHERE.', 'It filters the groups, as HAVING does.', 'Ordering is $sort.'] },
+  { q: 'Modules store lecturerId rather than a copy of the lecturer. Why reference here?',
+    opts: ['MongoDB cannot embed objects', 'One lecturer is shared by several modules and changes independently', 'References are always faster'], a: 1,
+    why: ['Embedding is MongoDB\'s strength.', 'Copies would recreate the Week 1 update anomaly when a lecturer\'s details change.', 'A reference needs $lookup, which costs more than reading an embedded field.'] },
+  { q: '<code>insertOne({ _id: 1001, … })</code> returns <code>E11000 duplicate key error</code>. What is the cause?',
+    opts: ['A unique index or _id already holds 1001', 'The collection is full', 'The document is too large'], a: 0,
+    why: ['_id is always unique; so is any field with a unique index.', 'Collections have no such limit.', 'The size limit is 16 MB per document and gives a different error.'] }
+];

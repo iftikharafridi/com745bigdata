@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 MongoDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+</head>
+<body data-root="../" data-page="mongodb">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="../index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure · Week 2</span>
+  <h1>Document databases and MongoDB</h1>
+  <p class="lead">The same university, stored as documents. You will see what changes when data that is read together is stored together, query and update it in mongosh, join and summarise it with the aggregation pipeline, and decide when MongoDB is the right choice.</p>
+  <div class="chips">
+    <span class="chip">Lecture 4 · Practicals 3-4</span>
+    <span class="chip">MongoDB + mongosh + Compass</span>
+    <span class="chip">Dataset: <a href="../labs.html#mongo">uni_db (documents)</a></span>
+    <span class="chip">Assessed in CW1 (LO1)</span>
+  </div>
+  <nav class="toc" aria-label="On this page">
+    <a href="#understand">A Understand</a><a href="#demo">B Watch</a><a href="#explore">C Explore</a><a href="#practise">D Practise</a><a href="#independent">E Practicals</a><a href="#check">F Check</a>
+  </nav>
+</header>
+
+<section id="outcomes" data-nav="Learning outcomes">
+  <div class="sec-head"><h2>What you will be able to do</h2></div>
+  <ul class="lo-list">
+    <li><span class="lo">T1</span><span>Explain documents, collections and databases, and compare JSON, BSON and XML.</span></li>
+    <li><span class="lo">T2</span><span>Model a scenario as documents, choosing between embedding and referencing and justifying the choice.</span></li>
+    <li><span class="lo">T3</span><span>Create, read, update and delete documents in mongosh, using query and update operators.</span></li>
+    <li><span class="lo">T4</span><span>Answer multi-collection questions with the aggregation pipeline ($match, $group, $unwind, $lookup, $sort, $project).</span></li>
+    <li><span class="lo">T5</span><span>Translate between SQL and MongoDB queries, and say when a document database suits a problem and when it does not.</span></li>
+  </ul>
+  <p class="callout"><b>About the results on this page.</b> Every output was produced by a MongoDB emulator (mingo) and replayed on a second, independent one (mongomock): 115 reads and writes compared, 0 differences. They have not yet been run on a MongoDB server, so they carry the <span class="badge b-emu">Checked with a MongoDB emulator</span> badge. ObjectIds and line breaks will look slightly different on your machine.</p>
+</section>
+
+<!-- ============================== A ============================== -->
+<div class="part" id="understand" data-nav="A · Understand"><span class="letter">A</span><h2>Understand</h2><p>From tables to documents: what changes, and why.</p></div>
+
+<section id="a-why" data-nav="Why documents?">
+  <div class="sec-head"><span class="sec-num">A1</span><h3>Why documents?</h3></div>
+  <div class="prose">
+    <p>Look back at Practical 1. Six tables for one university, two of them only there to hold many-to-many links, and a three-table JOIN to answer "which modules is Ahmed on?". A <b>document database</b> stores each record as a self-describing document that can hold nested objects and lists, so data that is read together can be stored together.</p>
+    <p>Documents are written in a structured text format. Three you will meet:</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Format</th><th>Looks like</th><th>Strengths and weaknesses</th></tr></thead><tbody>
+    <tr><td><b>JSON</b></td><td class="m">{ "forename": "Ahmed", "modules": ["COM745", "COM746"] }</td><td>Today's standard for data exchange; human-readable; platform-neutral. No date type.</td></tr>
+    <tr><td><b>XML</b></td><td class="m">&lt;student&gt;&lt;forename&gt;Ahmed&lt;/forename&gt;…</td><td>Human-readable but verbose; costly to parse and store. Mostly legacy systems.</td></tr>
+    <tr><td><b>BSON</b></td><td>Binary JSON (not human-readable)</td><td>What MongoDB stores and sends. Faster to scan, and adds types JSON lacks: Date, ObjectId, Int32/Int64, Decimal128.</td></tr>
+  </tbody></table></div>
+  <div class="tbl"><table><thead><tr><th>JSON type</th><th>Example</th><th>Use it for</th></tr></thead><tbody>
+    <tr><td>string</td><td class="m">'COM745'</td><td>Text, codes, phone numbers</td></tr>
+    <tr><td>number</td><td class="m">20</td><td>Quantities you calculate with</td></tr>
+    <tr><td>boolean</td><td class="m">true</td><td>Yes/no facts</td></tr>
+    <tr><td>null</td><td class="m">null</td><td>Known to be empty (often you simply leave the field out)</td></tr>
+    <tr><td>object</td><td class="m">{ forename: 'Laura', surname: 'Wilson' }</td><td>A group of fields: a composite attribute, or an embedded record</td></tr>
+    <tr><td>array</td><td class="m">['COM745', 'COM746']</td><td>Lists: the multivalued attributes that needed extra tables in Week 1</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="a-docs" data-nav="Documents and collections">
+  <div class="sec-head"><span class="sec-num">A2</span><h3>Documents, collections and databases</h3></div>
+  <div class="tbl"><table><thead><tr><th>Relational (MySQL)</th><th>Document (MongoDB)</th><th>Note</th></tr></thead><tbody>
+    <tr><td>Database / schema</td><td>Database</td><td><code>use uni_db</code> creates it when you first write to it</td></tr>
+    <tr><td>Table</td><td>Collection</td><td>No column definitions: documents in one collection may differ</td></tr>
+    <tr><td>Row</td><td>Document</td><td>Can nest objects and arrays</td></tr>
+    <tr><td>Column</td><td>Field</td><td>A missing field is simply absent, not NULL</td></tr>
+    <tr><td>Primary key</td><td><code>_id</code></td><td>Every document has one, unique and indexed; MongoDB adds an ObjectId if you don't</td></tr>
+    <tr><td>JOIN</td><td>Embedding, or <code>$lookup</code></td><td>Embed what is read together; $lookup the rest</td></tr>
+    <tr><td>SQL</td><td>mongosh methods + JSON filters</td><td><code>db.students.find({ course: 'MSCDS' })</code></td></tr>
+  </tbody></table></div>
+  <figure class="figure explorer" data-explorer="rowsdoc">
+    <div class="title"><span class="tagx">Explorer</span><h3>Rows versus a document</h3><span class="badge b-emu">Emulator data</span></div>
+    <p class="caption">Pick a student. On the left, the rows MySQL needs across three tables; on the right, the one document in uni_db. Try John Smith (1003) and a student with no mobile.</p>
+    <div class="body"></div>
+  </figure>
+  <p class="note">An <b>ObjectId</b> is a 12-byte value: a timestamp, a random part and a counter. It is unique without asking a central server, which matters when many servers insert at once. When your data already has a natural key (a student number, a module code), using it as <code>_id</code> keeps queries readable, as uni_db does.</p>
+</section>
+
+<section id="a-model" data-nav="Embed or reference?">
+  <div class="sec-head"><span class="sec-num">A3</span><h3>Modelling: embed or reference?</h3></div>
+  <div class="prose">
+    <p>Normalisation in Week 1 asked "is each fact stored once?". Document modelling asks a second question first: <b>which data is read together?</b></p>
+    <ul class="list">
+      <li><b>Embed</b> a child inside its parent when it belongs to that one parent, is read with it, and stays small (a document is limited to 16 MB).</li>
+      <li><b>Reference</b> it by <code>_id</code> when it is shared by many parents, changes on its own, or can grow without limit.</li>
+    </ul>
+  </div>
+  <figure class="figure explorer" data-explorer="embed">
+    <div class="title"><span class="tagx">Explorer</span><h3>Three designs for the same university</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Switch designs and compare what common questions and changes cost. Design B is uni_db. Practical 3 asks you to choose and justify your own.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-query" data-nav="Querying with find()">
+  <div class="sec-head"><span class="sec-num">A4</span><h3>Querying with find()</h3></div>
+  <div class="prose">
+    <p><code>db.collection.find(filter, projection)</code>. The <b>filter</b> is a document of conditions: several conditions mean AND. The <b>projection</b> picks fields (1 to show, 0 to hide; <code>_id</code> shows unless you say <code>_id: 0</code>). Chain <code>.sort()</code>, <code>.limit()</code> and <code>.skip()</code> after it; use <code>countDocuments(filter)</code> to count.</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>SQL</th><th>MongoDB filter</th></tr></thead><tbody>
+    <tr><td class="m">WHERE status = 'D'</td><td class="m">{ status: 'D' }</td></tr>
+    <tr><td class="m">WHERE qty &gt; 10 AND qty &lt; 30</td><td class="m">{ qty: { $gt: 10, $lt: 30 } }</td></tr>
+    <tr><td class="m">WHERE a = 1 OR b &lt; 5</td><td class="m">{ $or: [ { a: 1 }, { b: { $lt: 5 } } ] }</td></tr>
+    <tr><td class="m">WHERE status IN ('A','D')</td><td class="m">{ status: { $in: ['A', 'D'] } }</td></tr>
+    <tr><td class="m">WHERE Mobile IS NULL</td><td class="m">{ mobile: { $exists: false } }  (or { mobile: null }: missing <i>or</i> null)</td></tr>
+    <tr><td class="m">WHERE Surname LIKE 'B%'</td><td class="m">{ surname: /^B/ }</td></tr>
+    <tr><td class="m">nested column</td><td class="m">{ 'size.uom': 'in' }  (dot notation, in quotes)</td></tr>
+    <tr><td class="m">JOIN … WHERE r.ModuleCode = 'COM745'</td><td class="m">{ 'registrations.module': 'COM745' }  (matches any array element)</td></tr>
+  </tbody></table></div>
+  <figure class="figure explorer" data-explorer="querybuilder">
+    <div class="title"><span class="tagx">Explorer</span><h3>Query builder</h3><span class="badge b-emu">Runs on the emulator</span></div>
+    <p class="caption">Choose a field, a condition and a value. You get the mongosh query, the same question in SQL against the Week 1 tables, and the documents it returns from uni_db.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-change" data-nav="Changing data">
+  <div class="sec-head"><span class="sec-num">A5</span><h3>Inserting, updating and deleting</h3></div>
+  <div class="tbl"><table><thead><tr><th>Task</th><th>Use</th><th>Avoid (deprecated)</th></tr></thead><tbody>
+    <tr><td>Add documents</td><td class="m">insertOne(doc) · insertMany([doc, …])</td><td class="m">insert()</td></tr>
+    <tr><td>Change fields</td><td class="m">updateOne(filter, { $set: … }) · updateMany(…)</td><td class="m">update(): without operators it <b>replaces</b> the document</td></tr>
+    <tr><td>Replace a whole document</td><td class="m">replaceOne(filter, newDoc)</td><td></td></tr>
+    <tr><td>Remove documents</td><td class="m">deleteOne(filter) · deleteMany(filter)</td><td class="m">remove()</td></tr>
+  </tbody></table></div>
+  <div class="tbl"><table><thead><tr><th>Update operator</th><th>Does</th><th>Example</th></tr></thead><tbody>
+    <tr><td class="m">$set</td><td>Sets a field (creates it if missing)</td><td class="m">{ $set: { mobile: '07700 900001' } }</td></tr>
+    <tr><td class="m">$unset</td><td>Removes a field</td><td class="m">{ $unset: { mobile: '' } }</td></tr>
+    <tr><td class="m">$inc</td><td>Adds to a number</td><td class="m">{ $inc: { level: 1 } }</td></tr>
+    <tr><td class="m">$push · $pull</td><td>Adds to · removes from an array</td><td class="m">{ $push: { registrations: { module: 'COM750' } } }</td></tr>
+  </tbody></table></div>
+  <p class="callout warn"><b>The replacement trap (Lecture 4).</b> <code>db.students.update({ surname: 'Parker' }, { surname: "O'Parker" })</code> replaces the matching document with <code>{ surname: "O'Parker" }</code>: every other field is lost. <code>updateOne</code> refuses an update without operators, which is one reason it replaced <code>update()</code>. Results report <code>matchedCount</code> (found) and <code>modifiedCount</code> (actually changed): they differ when the value was already the same.</p>
+</section>
+
+<section id="a-agg" data-nav="Aggregation pipeline">
+  <div class="sec-head"><span class="sec-num">A6</span><h3>The aggregation pipeline</h3></div>
+  <div class="prose">
+    <p><code>db.collection.aggregate([stage, stage, …])</code> passes documents through stages in order, each stage feeding the next. It is MongoDB's GROUP BY, HAVING, ORDER BY and JOIN in one tool.</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Stage</th><th>Does</th><th>SQL</th></tr></thead><tbody>
+    <tr><td class="m">$match</td><td>Keeps documents matching a filter</td><td>WHERE (before $group) · HAVING (after)</td></tr>
+    <tr><td class="m">$group</td><td>One output per key, with accumulators ($sum, $avg, $min, $max, $push)</td><td>GROUP BY</td></tr>
+    <tr><td class="m">$unwind</td><td>One document per element of an array</td><td>none: turns embedded data back into rows</td></tr>
+    <tr><td class="m">$lookup</td><td>Adds matching documents from another collection, as an array</td><td>LEFT JOIN</td></tr>
+    <tr><td class="m">$project</td><td>Chooses and computes fields</td><td>SELECT list</td></tr>
+    <tr><td class="m">$sort · $limit · $count</td><td>Order · cap · count</td><td>ORDER BY · LIMIT · COUNT(*)</td></tr>
+  </tbody></table></div>
+  <figure class="figure explorer" data-explorer="pipeline">
+    <div class="title"><span class="tagx">Explorer</span><h3>Pipeline builder</h3><span class="badge b-emu">Runs on the emulator</span></div>
+    <p class="caption">Switch stages on and off and reorder them. Watch the documents change after each stage. What happens if $group comes before $unwind?</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-when" data-nav="Indexes and when to use MongoDB">
+  <div class="sec-head"><span class="sec-num">A7</span><h3>Indexes, and when to choose MongoDB</h3></div>
+  <div class="prose">
+    <p>Every collection has an index on <code>_id</code>. <code>db.students.createIndex({ surname: 1 })</code> adds another; <code>{ unique: true }</code> makes it enforce an alternate key, like UNIQUE in MySQL. <code>explain()</code> shows <code>COLLSCAN</code> (every document read) or <code>IXSCAN</code> (index used), MongoDB's version of MySQL's type ALL and ref.</p>
+  </div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Good fit</span><ul class="list"><li>Records naturally shaped as documents (a student with their registrations, a product with its options)</li><li>Fields that vary between records</li><li>Reading a whole record at once</li><li>Scaling out across servers (sharding) for very large or fast data</li></ul></div>
+    <div class="card"><span class="k">Think twice</span><ul class="list"><li>Many-to-many data queried from every direction</li><li>Transactions across many documents on every request (supported since 4.0, but costly)</li><li>A strict schema you want the database to enforce everywhere</li><li>Heavy ad hoc reporting across collections</li></ul></div>
+  </div>
+  <p class="note">This is an LO2 judgement, and CW2 asks you to make it about your own data: justify the choice from the data and the questions, not from fashion.</p>
+</section>
+
+<!-- ============================== B ============================== -->
+<div class="part" id="demo" data-nav="B · Watch the demo"><span class="letter">B</span><h2>Watch the demonstration</h2><p>Six demonstrations in mongosh, from the first insert to the aggregation pipeline.</p></div>
+
+<section id="b-demos" data-nav="Demonstration library">
+  <div class="prose"><p>Each demonstration opens in presenter mode. Follow along in mongosh or in the <b>&gt;_MONGOSH</b> panel of Compass. Demos 2-6 start from <a href="../data/university/university_mongo.js">university_mongo.js</a>: run <code>load('university_mongo.js')</code> in mongosh from the folder that holds it, or paste the file into the Compass shell. Running it again resets the data.</p></div>
+  <div class="demos" data-demolist="mongodb"></div>
+</section>
+
+<!-- ============================== C ============================== -->
+<div class="part" id="explore" data-nav="C · Explore"><span class="letter">C</span><h2>Explore interactively</h2><p>A mongosh playground on the university documents, and a phrasebook from SQL.</p></div>
+
+<section id="c-playground" data-nav="mongosh playground">
+  <div class="sec-head"><span class="sec-num">C1</span><h3>mongosh playground</h3></div>
+  <figure class="figure explorer" data-explorer="mplayground">
+    <div class="title"><span class="tagx">Playground</span><h3>Run mongosh commands in your browser</h3><span class="badge b-emu">MongoDB emulator</span></div>
+    <p class="caption">uni_db is loaded. Supported: use, show dbs/collections, insert, find (sort, limit, skip, projection), findOne, countDocuments, distinct, update/replace/delete, aggregate (including $lookup), createIndex and getIndexes. Not supported: explain plans, storage sizes, validation, users.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="c-phrase" data-nav="SQL to MongoDB phrasebook">
+  <div class="sec-head"><span class="sec-num">C2</span><h3>SQL to MongoDB phrasebook</h3></div>
+  <p class="note">Each row is the same question in both languages, on the shared university data. "Run" loads the MongoDB version into the playground.</p>
+  <div style="display:flex;flex-direction:column;gap:12px"><div class="card"><span class="k">Filter and sort</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT Surname FROM Student
+WHERE CourseCode = &#x27;MSCDS&#x27;
+ORDER BY Surname;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.find({ course: &#x27;MSCDS&#x27; }, { _id: 0, surname: 1 }).sort({ surname: 1 })</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">Count missing values</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT COUNT(*) FROM Student WHERE Mobile IS NULL;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.countDocuments({ mobile: { $exists: false } })</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">OR</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT StudentID FROM Student
+WHERE EnrolmentLevel = 6 OR CourseCode = &#x27;MSCDS&#x27;
+ORDER BY StudentID;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.find({ $or: [ { level: 6 }, { course: &#x27;MSCDS&#x27; } ] }, { _id: 1 }).sort({ _id: 1 })</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">Pattern</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT Surname FROM Student WHERE Surname LIKE &#x27;B%&#x27; ORDER BY Surname;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.find({ surname: /^B/ }, { _id: 0, surname: 1 }).sort({ surname: 1 })</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">DISTINCT</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT DISTINCT Semester FROM Registration ORDER BY Semester;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.distinct(&#x27;registrations.semester&#x27;)</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">GROUP BY</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT CourseCode, COUNT(*) FROM Student
+GROUP BY CourseCode ORDER BY CourseCode;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.aggregate([
+  { $group: { _id: &#x27;$course&#x27;, n: { $sum: 1 } } },
+  { $sort: { _id: 1 } }
+])</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">JOIN through a link table</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT s.StudentID FROM Student s
+JOIN Registration r ON r.StudentID = s.StudentID
+WHERE r.ModuleCode = &#x27;COM748&#x27;
+ORDER BY s.StudentID;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.find({ &#x27;registrations.module&#x27;: &#x27;COM748&#x27; }, { _id: 1 }).sort({ _id: 1 })</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">JOIN to a referenced table</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT m.ModuleCode, l.Surname FROM Module m
+JOIN Lecturer l ON l.LecturerID = m.LecturerID
+ORDER BY m.ModuleCode;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.modules.aggregate([
+  { $lookup: { from: &#x27;lecturers&#x27;, localField: &#x27;lecturerId&#x27;, foreignField: &#x27;_id&#x27;, as: &#x27;l&#x27; } },
+  { $project: { surname: { $first: &#x27;$l.name.surname&#x27; } } },
+  { $sort: { _id: 1 } }
+])</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div><div class="card"><span class="k">GROUP BY over a link table + HAVING</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT ModuleCode, COUNT(*) AS n FROM Registration
+GROUP BY ModuleCode HAVING COUNT(*) &gt;= 6
+ORDER BY ModuleCode;</pre></div></div><div><div class="code" data-lang="mongosh"><pre>db.students.aggregate([
+  { $unwind: &#x27;$registrations&#x27; },
+  { $group: { _id: &#x27;$registrations.module&#x27;, n: { $sum: 1 } } },
+  { $match: { n: { $gte: 6 } } },
+  { $sort: { _id: 1 } }
+])</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-mongo>Run the mongosh version in the playground</button></div></div></div><p class="note">Checked: each pair returns the same values from MySQL 8.0.46 and from the MongoDB emulator (9 of 9).</p>
+</section>
+
+<!-- ============================== D ============================== -->
+<div class="part" id="practise" data-nav="D · Practise"><span class="letter">D</span><h2>Practise</h2><p>Short exercises for class. Try them in the playground first.</p></div>
+<section id="d-tasks" data-nav="Practice exercises">
+  <div class="tier t-core"><div class="tier-head"><span class="tag">Core</span><span class="note">find() and projection (Demo 2)</span></div><ol class="tasks">
+<li class="task" id="m1"><div class="task-q"><span class="num">M1</span><span>List the forename and surname of MSc Computer Science and Technology students (course MSCCST) at level 7, sorted by surname. Hide _id.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.students.find(
+  { course: &#x27;MSCCST&#x27;, level: 7 },
+  { forename: 1, surname: 1, _id: 0 }
+).sort({ surname: 1 }).limit(5)</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.students.find( …
+[
+  { forename: &#x27;Bilal&#x27;, surname: &#x27;Ahmed&#x27; },
+  { forename: &#x27;Ahmed&#x27;, surname: &#x27;Ali&#x27; },
+  { forename: &#x27;Aisha&#x27;, surname: &#x27;Bello&#x27; },
+  { forename: &#x27;Oliver&#x27;, surname: &#x27;Bennett&#x27; },
+  { forename: &#x27;Hannah&#x27;, surname: &#x27;Clarke&#x27; }
+]</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div><p class="note">First 5 shown (12 match).</p></details></li>
+<li class="task" id="m2"><div class="task-q"><span class="num">M2</span><span>How many students have no middle name stored?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.students.countDocuments({ middleName: { $exists: false } })</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.students.countDocuments({ middleName: { $exists: false } })
+18</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div></details></li>
+<li class="task" id="m3"><div class="task-q"><span class="num">M3</span><span>Show the name and lecturer of every 20-credit module.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.modules.find({ credits: 20 }, { name: 1, lecturerId: 1 })</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.modules.find({ credits: 20 }, { name: 1, lecturerId: 1 })
+[
+  { _id: &#x27;COM745&#x27;, name: &#x27;Big Data and Infrastructure&#x27;, lecturerId: 1 },
+  { _id: &#x27;COM746&#x27;, name: &#x27;Database Systems&#x27;, lecturerId: 2 },
+  {
+    _id: &#x27;COM747&#x27;,
+    name: &#x27;Data Science and Machine Learning&#x27;,
+    lecturerId: 5
+  },
+  { _id: &#x27;COM748&#x27;, name: &#x27;Cloud Computing&#x27;, lecturerId: 4 },
+  { _id: &#x27;COM750&#x27;, name: &#x27;Artificial Intelligence&#x27;, lecturerId: 3 }
+]</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div></details></li>
+</ol></div>
+<div class="tier t-chal"><div class="tier-head"><span class="tag">Challenge</span><span class="note">Arrays and aggregation (Demos 4-5)</span></div><ol class="tasks">
+<li class="task" id="m4"><div class="task-q"><span class="num">M4</span><span>Which students are registered on BOTH COM745 and COM747?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.students.find(
+  { &#x27;registrations.module&#x27;: { $all: [&#x27;COM745&#x27;, &#x27;COM747&#x27;] } },
+  { forename: 1, surname: 1 }
+)</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.students.find( …
+[
+  { _id: 1002, forename: &#x27;Sarah&#x27;, surname: &#x27;Khan&#x27; },
+  { _id: 1013, forename: &#x27;Wei&#x27;, surname: &#x27;Zhang&#x27; }
+]</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div><p class="note">$all requires every listed value to be present in the array.</p></details></li>
+<li class="task" id="m5"><div class="task-q"><span class="num">M5</span><span>How many registrations are there in each semester?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.students.aggregate([
+  { $unwind: &#x27;$registrations&#x27; },
+  { $group: { _id: &#x27;$registrations.semester&#x27;, registrations: { $sum: 1 } } },
+  { $sort: { _id: 1 } }
+])</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.students.aggregate([ …
+[
+  { _id: &#x27;Semester 1&#x27;, registrations: 22 },
+  { _id: &#x27;Semester 3&#x27;, registrations: 4 }
+]</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div></details></li>
+<li class="task" id="m6"><div class="task-q"><span class="num">M6</span><span>List lecturers with rank above 20, showing only their surname and rank, highest rank first.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.lecturers.find(
+  { rank: { $gt: 20 } },
+  { _id: 0, &#x27;name.surname&#x27;: 1, rank: 1 }
+).sort({ rank: -1 })</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.lecturers.find( …
+[
+  { name: { surname: &#x27;Wilson&#x27; }, rank: 38 },
+  { name: { surname: &#x27;Brown&#x27; }, rank: 28 },
+  { name: { surname: &#x27;Khan&#x27; }, rank: 24 },
+  { name: { surname: &#x27;Chen&#x27; }, rank: 21 }
+]</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div></details></li>
+</ol></div>
+<div class="tier t-str"><div class="tier-head"><span class="tag">Stretch</span><span class="note">Design thinking</span></div><ol class="tasks">
+<li class="task" id="m7"><div class="task-q"><span class="num">M7</span><span>Find the students who are not registered on any module.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="mongosh"><pre>db.students.find({ registrations: { $size: 0 } }, { forename: 1, surname: 1 })</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a MongoDB emulator</span></div><pre>uni_db&gt; db.students.find({ registrations: { $size: 0 } }, { forename: 1, surname: 1 })
+[ { _id: 1003, forename: &#x27;John&#x27;, surname: &#x27;Smith&#x27; } ]</pre></div><div class="controls"><button type="button" class="btn" data-try-mongo>Try it in the playground</button></div><p class="note">John Smith, as in Week 1. Compare with the LEFT JOIN ... IS NULL you wrote in MySQL.</p></details></li>
+<li class="task" id="m8"><div class="task-q"><span class="num">M8</span><span>Coursework marks must now be stored: each registration has up to three assessments, each with a mark and a marker. Where would you put them in uni_db, and why?</span></div><details><summary>Check your answer</summary><pre class="console">Embed them inside each registration:
+  registrations: [ { module: &#x27;COM745&#x27;, semester: &#x27;Semester 1&#x27;,
+                     assessments: [ { no: 1, mark: 64, markerId: 1 }, … ] } ]
+They belong to one registration, are read with it, and are bounded (at most three).
+Reference the marker by markerId: lecturers are shared and change on their own.
+If marks were queried mostly by module (exam boards), a separate marks collection keyed by student and module would be a defensible alternative: say which queries drive the choice.</pre></details></li>
+</ol></div>
+</section>
+
+<!-- ============================== E ============================== -->
+<div class="part" id="independent" data-nav="E · Practicals"><span class="letter">E</span><h2>Complete independently</h2><p>Practicals 3 and 4, original task numbers, with setup and troubleshooting.</p></div>
+
+<section id="e-setup" data-nav="Setting up MongoDB">
+  <div class="sec-head"><span class="sec-num">E1</span><h3>Setting up MongoDB, mongosh and Compass</h3></div>
+  <ol class="list prose">
+    <li><b>Lab PCs</b>: MongoDB runs as a Windows service; MongoDB Compass is on the Start menu, and its bottom panel <b>&gt;_MONGOSH</b> is a full mongosh shell.</li>
+    <li><b>Your own laptop</b>: install MongoDB Community Server (Windows MSI: tick "Install as a Service" and "Install Compass"), plus <a href="https://www.mongodb.com/try/download/shell">mongosh</a>. macOS with Homebrew: <code>brew tap mongodb/brew</code>, <code>brew install mongodb-community</code>, <code>brew services start mongodb-community</code>.</li>
+    <li>Connect Compass to <code>mongodb://127.0.0.1:27017</code> (no username on a local install).</li>
+    <li>Load the dataset: open a terminal in the folder holding <a href="../data/university/university_mongo.js">university_mongo.js</a>, run <code>mongosh</code>, then <code>load('university_mongo.js')</code>. It prints the four collection counts: 6, 3, 6 and 24.</li>
+  </ol>
+</section>
+
+<section id="e-p3" data-nav="Practical 3">
+  <div class="sec-head"><span class="sec-num">E2</span><h3>Practical 3: Data modelling in document databases</h3></div>
+  <div class="card"><span class="k">Scenario (as Practical 0)</span><p>A university wishes to store information about students, modules, courses and lecturers. Courses have a unique course code, course name and an accreditation level (4-8). Each course has a coordinator, which is a lecturer. Courses consist of modules. Modules have a name, unique module code and are delivered by a nominated lecturer. Lecturers have unique employee numbers, forenames, middle names and surnames, a date of birth, an email address and a rank of seniority (1-40). Students have unique student numbers, forenames, middle names and surnames, a date of birth, an email address and a current enrolment level (1-20).</p></div>
+<ol class="tasks">
+<li class="task" data-key="P3-T0"><div class="task-q"><span class="num">T0</span><span>For some reason, the University has decided to store all its records as JSON. List the attribute types in the scenario and read about JSON to decide how to represent each type. Pay attention to arrays and sub-objects. <a href="https://www.json.org/">JSON at json.org</a></span></div><details><summary>Hint</summary><p>JSON has string, number, boolean, null, object and array. BSON (what MongoDB stores) adds Date, ObjectId, Int32/Int64, Decimal128. A date of birth is best stored as a Date, not text.</p></details></li>
+<li class="task" data-key="P3-T1"><div class="task-q"><span class="num">T1</span><span>Devise a strategy to store the scenario&#x27;s data across JSON documents. Aim for efficiency: avoid repetition and redundant expression. This is similar to normalisation in an RDBMS but will likely differ.</span></div><details><summary>Hint</summary><p>For each relationship ask: is the child read together with the parent, owned by one parent, and bounded in size? Then embed. Shared or unbounded? Reference by _id. Try the embed-or-reference explorer in Part A.</p></details></li>
+<li class="task" data-key="P3-T2"><div class="task-q"><span class="num">T2</span><span>Explain the rationale for the strategy you produced.</span></div><details><summary>Hint</summary><p>Name the queries your design makes easy (one read) and the ones it makes harder ($lookup). Say where you accepted duplication and why.</p></details></li>
+<li class="task" data-key="P3-T3"><div class="task-q"><span class="num">T3</span><span>Find MongoDB on your workstation and start it, ready for Practical 4. On your own machine, install MongoDB Community Server, mongosh and MongoDB Compass. <a href="https://www.mongodb.com/docs/manual/administration/install-community/">Install MongoDB Community Edition</a></span></div><details><summary>Hint</summary><p>Lab PCs: MongoDB runs as a Windows service; open Compass from the Start menu. Own laptop: mongodb.com/try/download/community (Windows MSI installs the service and Compass); macOS: Homebrew, brew tap mongodb/brew then brew install mongodb-community and brew services start mongodb-community.</p></details></li>
+</ol>
+</section>
+
+<section id="e-p4" data-nav="Practical 4">
+  <div class="sec-head"><span class="sec-num">E3</span><h3>Practical 4: Mongo tools</h3></div>
+  <ol class="tasks">
+<li class="task" data-key="P4-T0"><div class="task-q"><span class="num">T0</span><span>Open Compass and create a connection to the MongoDB server (on your own machine, make sure the server is running). Local servers listen on 127.0.0.1, port 27017; user accounts are usually not enabled. Name the connection and save it.</span></div><details><summary>Hint</summary><p>Connection string: mongodb://127.0.0.1:27017. (The original sheet says 21017 in one place: the port is 27017.)</p></details></li>
+<li class="task" data-key="P4-T1"><div class="task-q"><span class="num">T1</span><span>Spend 5-10 minutes exploring Compass. Find how to open the mongosh shell (at the bottom: &gt;_MONGOSH) and how to issue a query. What are the differences between these interfaces?</span></div><details><summary>Hint</summary><p>Compass shows documents and builds filters visually; mongosh runs any command and is scriptable. Both talk to the same server.</p></details></li>
+<li class="task" data-key="P4-T2"><div class="task-q"><span class="num">T2</span><span>Use Compass to create a database for this practical and select it. You may use the graphical interface or the shell.</span></div><details><summary>Hint</summary><p>Compass: Databases &gt; Create database (it asks for a first collection too). Shell: use uni_db.</p></details></li>
+<li class="task" data-key="P4-T3"><div class="task-q"><span class="num">T3</span><span>Use the shell to insert at least 20 documents across all the document types you designed in Practical 3: at least one course, two modules, a lecturer per module and 4-7 students per module.</span></div><details><summary>Hint</summary><p>One insertMany per collection. If you reference by _id, choose readable _ids (COM745, 1001) so your queries stay readable.</p></details></li>
+<li class="task" data-key="P4-T4"><div class="task-q"><span class="num">T4</span><span>View your documents in the visual browser. Then use mongo commands to explore the data, query particular information and sort it.</span></div><details><summary>Hint</summary><p>find(filter, projection).sort({ field: 1 }). Compare what you see in Compass&#x27; Documents tab.</p></details></li>
+<li class="task" data-key="P4-T5"><div class="task-q"><span class="num">T5</span><span>Create a query listing the students studying a particular module, given by a module code. How do you determine the relation between module records and student records?</span></div><details><summary>Hint</summary><p>It depends on your design: a filter on an embedded array (&quot;registrations.module&quot;) or a $lookup between collections.</p></details></li>
+<li class="task" data-key="P4-T6"><div class="task-q"><span class="num">T6</span><span>Create a query giving module information: Module Code, Module Name, Lecturer and Student count. Build on T5.</span></div><details><summary>Hint</summary><p>An aggregate pipeline: $lookup for the lecturer, then count the students ($size of a lookup, or $unwind + $group).</p></details></li>
+<li class="task" data-key="P4-T7"><div class="task-q"><span class="num">T7</span><span>Create a query that lists students across all modules.</span></div><details><summary>Hint</summary><p>$unwind the registrations (or the lookup result) so each student-module pair becomes one document, then $sort.</p></details></li>
+<li class="task" data-key="P4-T8"><div class="task-q"><span class="num">T8</span><span>Create a query giving the total count of students across all modules.</span></div><details><summary>Hint</summary><p>As in Practical 1: registrations, or different people? Both are one pipeline or one countDocuments.</p></details></li>
+<li class="task" data-key="P4-T9"><div class="task-q"><span class="num">T9</span><span>Write an UPDATE query that updates the name of each module independently, with the module code given in the filter.</span></div><details><summary>Hint</summary><p>updateOne({ _id: … }, { $set: { name: … } }), once per module. Check matchedCount.</p></details></li>
+<li class="task" data-key="P4-T10"><div class="task-q"><span class="num">T10</span><span>Create a DELETE query that deletes all students from a specified module, with the module code given.</span></div><details><summary>Hint</summary><p>Think before you deleteMany: if registrations are embedded, removing a student from a module is an update ($pull), not a delete of the student.</p></details></li>
+</ol>
+  <p class="note" data-progress></p>
+</section>
+
+<section id="e-trouble" data-nav="Troubleshooting">
+  <div class="sec-head"><span class="sec-num">E4</span><h3>Troubleshooting</h3></div>
+  <div class="tbl"><table><thead><tr><th>You see</th><th>When</th><th>What to do</th></tr></thead><tbody><tr><td class="m">MongoServerSelectionError: connect ECONNREFUSED 127.0.0.1:27017</td><td>Connecting</td><td>The server is not running. Windows: Services &gt; MongoDB Server &gt; Start. macOS: brew services start mongodb-community.</td></tr><tr><td class="m">Compass cannot connect to 127.0.0.1:21017</td><td>Connecting</td><td>Wrong port, copied from the old sheet. MongoDB listens on 27017.</td></tr><tr><td class="m">&#x27;mongo&#x27; is not recognized / command not found: mongo</td><td>Opening the shell</td><td>The old mongo shell was removed in MongoDB 6. Use mongosh, or the &gt;_MONGOSH panel in Compass.</td></tr><tr><td class="m">show dbs does not list my database</td><td>After use</td><td>It has no data yet. Insert a document; then it appears.</td></tr><tr><td class="m">SyntaxError: Unexpected token</td><td>Any command</td><td>A missing comma, bracket or brace; or curly quotes pasted from slides (‘ ’ “ ”). Retype them as &#x27; or &quot;.</td></tr><tr><td class="m">ReferenceError: COM745 is not defined</td><td>Any command</td><td>Text values need quotes: { module: &#x27;COM745&#x27; }.</td></tr><tr><td class="m">E11000 duplicate key error</td><td>insert / createIndex</td><td>_id (or a unique-indexed field) already has that value.</td></tr><tr><td class="m">MongoInvalidArgumentError: Update document requires atomic operators</td><td>updateOne / updateMany</td><td>Use an operator: { $set: { … } }.</td></tr><tr><td class="m">All fields of a document disappeared</td><td>update()</td><td>The legacy update() without operators replaced the document. Reload the data; use updateOne with $set.</td></tr><tr><td class="m">Query returns nothing for { &#x27;size.uom&#x27;: &#x27;in&#x27; } without quotes</td><td>find</td><td>Dotted names must be quoted. Without quotes it is a JavaScript error, not a query.</td></tr><tr><td class="m">Nothing returned for { level: &#x27;7&#x27; }</td><td>find</td><td>Types matter: &#x27;7&#x27; (text) is not 7 (number).</td></tr><tr><td class="m">load(&#x27;university_mongo.js&#x27;): no such file</td><td>Loading data</td><td>Start mongosh from the folder that holds the file, or give the full path in load().</td></tr><tr><td class="m">DeprecationWarning: Collection.insert() / update() / remove() is deprecated</td><td>Old examples</td><td>Use insertOne/insertMany, updateOne/updateMany, deleteOne/deleteMany.</td></tr></tbody></table></div>
+</section>
+
+<section id="e-more" data-nav="More examples">
+  <div class="sec-head"><span class="sec-num">E5</span><h3>More examples for home study</h3></div>
+  <div class="grid2">
+    <div class="card"><span class="k">Enforce a structure when you want one</span><p>A JSON Schema validator makes MongoDB refuse documents without the fields you require:</p>
+      <div class="code" data-lang="mongosh"><pre>db.createCollection('lecturers2', {
+  validator: { $jsonSchema: {
+    bsonType: 'object',
+    required: ['email', 'rank'],
+    properties: {
+      rank: { bsonType: 'int', minimum: 1, maximum: 40 }
+    }
+  } }
+})</pre></div></div>
+    <div class="card"><span class="k">Import a CSV from the command line</span><p>mongoimport ships with MongoDB Database Tools:</p>
+      <div class="code" data-lang="shell"><pre>mongoimport --db uni_db --collection weather \
+  --type csv --headerline --file weather.csv</pre></div><p class="note">Compass can do the same: Add Data > Import JSON or CSV file.</p></div>
+    <div class="card"><span class="k">Compass aggregation builder</span><p>In Compass open a collection > Aggregations. Add stages one at a time and see the output of each, like the pipeline builder in A6. "Export to language" turns the pipeline into Python or Java code.</p></div>
+    <div class="card"><span class="k">From Python</span><p>The same queries from a program, with PyMongo:</p>
+      <div class="code" data-lang="python"><pre>from pymongo import MongoClient
+db = MongoClient('mongodb://127.0.0.1:27017')['uni_db']
+for s in db.students.find({'course': 'MSCDS'}, {'surname': 1}):
+    print(s)</pre></div></div>
+  </div>
+</section>
+
+<!-- ============================== F ============================== -->
+<div class="part" id="check" data-nav="F · Check"><span class="letter">F</span><h2>Check your understanding</h2><p>Quiz, reflection, misconceptions and key terms.</p></div>
+
+<section id="f-quiz" data-nav="Quiz">
+  <div class="sec-head"><span class="sec-num">F1</span><h3>Quiz</h3></div>
+  <div class="quiz" data-quiz="mongodb"></div>
+</section>
+
+<section id="f-reflect" data-nav="Reflect">
+  <div class="sec-head"><span class="sec-num">F2</span><h3>Reflect and discuss</h3></div>
+  <ul class="list prose">
+    <li>Compare your Practical 1 answers with your Practical 4 answers. Which questions became easier in MongoDB, and which harder? Why?</li>
+    <li>Your design for Practical 3 and a classmate's differ. Which queries does each make fast?</li>
+    <li>Flexible schemas let every document differ. What can go wrong when three developers spell a field three ways (<code>surname</code>, <code>lastName</code>, <code>last_name</code>)?</li>
+    <li>For CW2: would MongoDB be a sensible home for open data on education and deaths? What would one document be?</li>
+  </ul>
+</section>
+
+<section id="f-mis" data-nav="Misconceptions">
+  <div class="sec-head"><span class="sec-num">F3</span><h3>Common misconceptions</h3></div>
+  <div class="tbl"><table><thead><tr><th>Students often say…</th><th>Correct it to…</th></tr></thead><tbody>
+    <tr><td>"MongoDB has no schema, so design doesn't matter."</td><td>The database doesn't enforce one, so the design lives in your code and your choices. A poor document design costs as much as a poor table design.</td></tr>
+    <tr><td>"Embed everything: that's the point of documents."</td><td>Embed what is owned, read together and bounded; reference what is shared or grows.</td></tr>
+    <tr><td>"update() changes the fields I give it."</td><td>Only with operators. Without $set the legacy update() replaces the whole document.</td></tr>
+    <tr><td>"MongoDB can't join."</td><td>$lookup joins at query time. It is just not the first tool you reach for.</td></tr>
+    <tr><td>"A missing field and a null field are the same."</td><td>{ f: { $exists: false } } finds only missing; { f: null } finds missing or null.</td></tr>
+    <tr><td>"use uni_db created the database."</td><td>It only selects it. The database exists once something is written to it.</td></tr>
+    <tr><td>"NoSQL means no transactions."</td><td>MongoDB has single-document atomicity always and multi-document transactions since 4.0, with a performance cost.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="lo-map" data-nav="Learning outcomes and CW1">
+  <div class="sec-head"><span class="sec-num">F4</span><h3>What this topic counts towards</h3></div>
+  <div class="tbl"><table><thead><tr><th>Module outcome</th><th>How this topic builds it</th><th>Assessed</th></tr></thead><tbody>
+    <tr><td><b>LO1</b> Understand big data and how storage paradigms address it</td><td>NoSQL concepts, the document model, CRUD and aggregation in MongoDB</td><td>CW1 (Week 7, 9 Nov): NoSQL concepts and document databases are listed topics</td></tr>
+    <tr><td><b>LO2</b> Appraise paradigms and when to apply them</td><td>Embed vs reference; when MongoDB fits and when it does not</td><td>CW2 technology justification</td></tr>
+    <tr><td><b>LO4</b> Apply skills to data in a range of paradigms</td><td>Querying and summarising documents in mongosh</td><td>CW2 analysis</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="f-gloss" data-nav="Key terms">
+  <div class="sec-head"><span class="sec-num">F5</span><h3>Key terms</h3></div>
+  <dl class="gloss"><dt id="gm-aggregation-pipeline">Aggregation pipeline</dt><dd>A list of stages ($match, $group, …) that documents pass through in order.</dd><dt id="gm-bson">BSON</dt><dd>Binary JSON: how MongoDB stores documents; adds types such as Date and ObjectId.</dd><dt id="gm-collection">Collection</dt><dd>A group of documents, the equivalent of a table, with no fixed columns.</dd><dt id="gm-document">Document</dt><dd>A record made of field-value pairs, which may nest objects and arrays.</dd><dt id="gm-embedding">Embedding</dt><dd>Storing related data inside a document (a student&#x27;s registrations).</dd><dt id="gm-filter">Filter</dt><dd>The document of conditions passed to find(), updateOne() etc.</dd><dt id="gm-mongosh">mongosh</dt><dd>The MongoDB shell. Replaced the legacy mongo shell.</dd><dt id="gm-objectid">ObjectId</dt><dd>A 12-byte unique id (timestamp, random value, counter) MongoDB generates for _id.</dd><dt id="gm-projection">Projection</dt><dd>The second argument of find(): which fields to return.</dd><dt id="gm-referencing">Referencing</dt><dd>Storing another document&#x27;s _id instead of a copy; joined with $lookup.</dd><dt id="gm-upsert">Upsert</dt><dd>Update the matching document, or insert one if none matches.</dd><dt id="gm-write-concern">Write concern</dt><dd>How many nodes must confirm a write before it is acknowledged (w:1, majority).</dd></dl>
+</section>
+
+<section id="f-exit" data-nav="Exit self-check">
+  <div class="sec-head"><span class="sec-num">F6</span><h3>Exit self-check</h3></div>
+  <div class="rate">
+    <div class="rate-row" data-key="model"><span>I can explain documents, collections, _id and BSON.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="embed"><span>I can decide between embedding and referencing and justify it.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="crud"><span>I can insert, find, update and delete documents with operators.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="agg"><span>I can write a pipeline with $match, $unwind, $group, $lookup and $sort.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="choose"><span>I can say when MongoDB suits a problem better than MySQL, and when it does not.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+  </div>
+</section>
+
+<nav class="pager" aria-label="Topic navigation">
+  <a href="nosql.html"><span class="k">Previous · Week 2</span>NoSQL concepts</a>
+  <a class="nx" href="../index.html#weeks"><span class="k">Next · Week 3</span>Time-series and InfluxDB (coming soon)</a>
+</nav>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · 2026/27</span><span>Synthetic data only. MongoDB outputs: emulator-checked, not yet run on a server.</span></footer>
+</div>
+</div>
+<script src="../assets/js/schedule.js"></script>
+<script src="../assets/js/search-index.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/vendor/mongo-engine.js"></script>
+<script src="../assets/js/mongodb-data.js"></script>
+<script src="../assets/js/demos-mongodb.js"></script>
+<script src="../assets/js/mongodb-content.js"></script>
+<script src="../assets/js/mongodb.js"></script>
+</body>
+</html>

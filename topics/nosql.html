@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 NoSQL Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+</head>
+<body data-root="../" data-page="nosql">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="../index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure · Week 2</span>
+  <h1>NoSQL: when tables are not enough</h1>
+  <p class="lead">Why a generation of databases gave up some relational guarantees, what they gained, and the families you will use for the rest of the module: documents, time series and graphs.</p>
+  <div class="chips">
+    <span class="chip">Lecture 3 (and Lecture 8a review)</span>
+    <span class="chip">Concepts: no software needed</span>
+    <span class="chip">Assessed in CW1 (LO1)</span>
+  </div>
+  <nav class="toc" aria-label="On this page">
+    <a href="#understand">A Understand</a><a href="#demo">B Watch</a><a href="#explore">C Explore</a><a href="#practise">D Practise</a><a href="#independent">E Independent</a><a href="#check">F Check</a>
+  </nav>
+</header>
+
+<section id="outcomes" data-nav="Learning outcomes">
+  <div class="sec-head"><h2>What you will be able to do</h2></div>
+  <ul class="lo-list">
+    <li><span class="lo">T1</span><span>Explain what NoSQL means and where the term came from.</span></li>
+    <li><span class="lo">T2</span><span>Describe the limits of relational databases at scale, and scaling up versus scaling out.</span></li>
+    <li><span class="lo">T3</span><span>Name the main NoSQL families, with an example product and a fitting use case for each.</span></li>
+    <li><span class="lo">T4</span><span>Contrast ACID with eventual consistency, and explain a stale read on a replicated database.</span></li>
+  </ul>
+</section>
+
+<div class="part" id="understand" data-nav="A · Understand"><span class="letter">A</span><h2>Understand</h2><p>From last week's tables to a new family of databases.</p></div>
+
+<section id="a-reflect" data-nav="Reflect on Practical 1">
+  <div class="sec-head"><span class="sec-num">A1</span><h3>Start from last week's practical</h3></div>
+  <ul class="list prose">
+    <li>How many tables did your university database need? Were all of them about a "thing", or were some only there to link two things?</li>
+    <li>How did you model one-to-one, one-to-many and many-to-many relationships?</li>
+    <li>How many JOINs did "module, lecturer and student count" (Practical 1, T6) take?</li>
+  </ul>
+  <p class="prose">The relational model is very good at consistency and at answering questions nobody planned for. The price is many tables, many JOINs, a fixed schema, and a design built for one server. NoSQL databases trade some of that for other strengths.</p>
+</section>
+
+<section id="a-what" data-nav="What NoSQL means">
+  <div class="sec-head"><span class="sec-num">A2</span><h3>What "NoSQL" means</h3></div>
+  <div class="prose">
+    <p><b>NoSQL</b> is an umbrella term for databases that model data without traditional relational tables. It is a rebellious and inaccurate name:</p>
+    <ul class="list">
+      <li>Carlo Strozzi first used it in 1998, for a lightweight database that was in fact relational but did not use SQL.</li>
+      <li>Johan Oskarsson reused it in 2009 to name a meetup on open-source, distributed, non-relational databases. That meaning stuck.</li>
+      <li>Most NoSQL systems now have SQL-like query languages, so it is usually read as <b>"Not only SQL"</b>. A more accurate name would be <i>NoREL</i>: not relational.</li>
+    </ul>
+    <p>Non-relational databases existed since the late 1960s, but rose to prominence around 2000, when web-scale companies hit the limits of a single relational server.</p>
+  </div>
+</section>
+
+<section id="a-why" data-nav="Why NoSQL? Scaling">
+  <div class="sec-head"><span class="sec-num">A3</span><h3>Why: the limits of one relational server</h3></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Relational limitations at big data scale</span><ul class="list">
+      <li>Volume: very large tables strain one server</li>
+      <li>Variety: a fixed schema copes badly with highly variable data</li>
+      <li>Read performance suffers with variable-length fields</li>
+      <li>Scaling usually means a bigger, more expensive server</li></ul></div>
+    <div class="card"><span class="k">NoSQL strengths</span><ul class="list">
+      <li>Scale across many ordinary servers (nodes)</li>
+      <li>Flexible or no fixed schema</li>
+      <li>Data models matched to the access pattern</li>
+      <li>High write and read throughput, often by relaxing consistency</li></ul></div>
+  </div>
+  <div class="prose">
+    <p><b>Scaling up</b> (vertical) means a bigger machine: more CPU, RAM and disk. It is simple, but cost rises steeply and there is a ceiling. <b>Scaling out</b> (horizontal) means more machines sharing the data (partitioning, called <i>sharding</i> in MongoDB) and keeping copies (<i>replication</i>). Cheap and almost unlimited, but the copies must be kept in step, and that is where consistency gets hard (A5).</p>
+  </div>
+</section>
+
+<section id="a-families" data-nav="NoSQL families">
+  <div class="sec-head"><span class="sec-num">A4</span><h3>The families</h3></div>
+  <div class="tbl"><table><thead><tr><th>Family</th><th>Stores</th><th>Examples</th><th>A fitting university use</th><th>In COM745</th></tr></thead><tbody>
+    <tr><td><b>Key-value</b></td><td>A value looked up by a unique key: a distributed hash map</td><td>Redis, DynamoDB, Riak</td><td>Session data for the student portal</td><td>Concept</td></tr>
+    <tr><td><b>Document</b></td><td>JSON/BSON documents in collections</td><td>MongoDB, CouchDB</td><td>Student records with their registrations</td><td><a href="mongodb.html">Week 2</a></td></tr>
+    <tr><td><b>Wide-column</b></td><td>Rows with flexible, very many columns, grouped in column families</td><td>Cassandra, HBase</td><td>Billions of Wi-Fi log events</td><td>HBase sits on Hadoop (concept)</td></tr>
+    <tr><td><b>Time-series</b></td><td>Time-stamped measurements, indexed by time and tags</td><td>InfluxDB, KDB+, Graphite, RRDTool</td><td>Campus energy and temperature sensors</td><td>Week 3</td></tr>
+    <tr><td><b>Graph</b></td><td>Nodes and relationships, both with properties</td><td>Neo4j, Amazon Neptune</td><td>Who teaches whom, prerequisites, recommendations</td><td>Week 4</td></tr>
+  </tbody></table></div>
+  <p class="note">Lecture 3 makes the point that we cannot cover every server type; the aim is to learn how to learn a new database from its documentation. Practicals hand-hold less as the weeks go on.</p>
+</section>
+
+<section id="a-consistency" data-nav="Consistency: ACID vs BASE">
+  <div class="sec-head"><span class="sec-num">A5</span><h3>Consistency: ACID and "eventually consistent"</h3></div>
+  <div class="prose">
+    <p>Week 1's relational transactions are <b>ACID</b>. Spread one database across many nodes and keeping every copy identical at every instant becomes slow, or impossible while a node is unreachable. Many NoSQL systems therefore choose <b>eventual consistency</b>: a write is accepted by one node and copied to the others shortly afterwards. Until it arrives, a client reading another node sees the old value (a <i>stale read</i>). The idea is often summarised as <b>BASE</b>: Basically Available, Soft state, Eventually consistent.</p>
+    <p>Lecture 3's example: X is split across server 1 and server 2; mid-write, server 2 goes down; X is complete on 1 and incomplete on 2. Systems recover from this with logs (journals), as journaling file systems do, rather than per-transaction checks.</p>
+  </div>
+  <p class="callout"><b>Further reading (beyond the lecture): the CAP theorem.</b> When the network between nodes fails (a <i>partition</i>), a distributed database must choose between <b>consistency</b> (refuse requests it cannot answer with the latest data) and <b>availability</b> (answer anyway, possibly stale). Many databases let you choose per operation, as the explorer in C1 does with "read from primary" versus "read from any node".</p>
+</section>
+
+<section id="a-compare" data-nav="NoSQL vs RDBMS">
+  <div class="sec-head"><span class="sec-num">A6</span><h3>NoSQL versus RDBMS: the lecture's comparison, read critically</h3></div>
+  <div class="tbl"><table><thead><tr><th>Aspect</th><th>NoSQL</th><th>RDBMS</th><th>Read it as…</th></tr></thead><tbody>
+    <tr><td>Availability</td><td>Good</td><td>Good</td><td>Both can be made highly available; NoSQL often makes it the default.</td></tr>
+    <tr><td>Consistency</td><td>Poor</td><td>Good</td><td>"Tunable" is fairer: many NoSQL systems offer strong consistency at a cost.</td></tr>
+    <tr><td>Data handling</td><td>Big data scale</td><td>Medium to large</td><td>For application workloads; analytical RDBMSs handle very large data too.</td></tr>
+    <tr><td>Performance</td><td>High</td><td>Low</td><td>For the access pattern the NoSQL model was designed for; ad hoc queries can be slower.</td></tr>
+    <tr><td>Reliability</td><td>Low to moderate</td><td>Good</td><td>Reflects weaker default guarantees, not crash-proneness.</td></tr>
+    <tr><td>Scalability</td><td>High</td><td>Moderate</td><td>RDBMSs can scale out too, but it costs a lot of money and effort.</td></tr>
+  </tbody></table></div>
+  <p class="note">A CW1 question may give a scenario and ask which family fits. Argue from the data shape, the access pattern and the consistency it needs, as in the Part D activity.</p>
+</section>
+
+<div class="part" id="demo" data-nav="B · Watch the demo"><span class="letter">B</span><h2>Watch the demonstration</h2><p>This is a concepts lecture. The code demonstrations for Week 2 are in MongoDB.</p></div>
+<section id="b-link" data-nav="MongoDB demonstrations">
+  <p class="prose">Go on to <a href="mongodb.html#demo">MongoDB, Part B</a>: six demonstrations that put these ideas into practice, starting with documents of different shapes in one collection.</p>
+  <div class="demos" data-demolist="mongodb"></div>
+</section>
+
+<div class="part" id="explore" data-nav="C · Explore"><span class="letter">C</span><h2>Explore interactively</h2><p>See a stale read happen.</p></div>
+<section id="c-consistency" data-nav="Replication explorer">
+  <div class="sec-head"><span class="sec-num">C1</span><h3>Replicas, lag and stale reads</h3></div>
+  <figure class="figure explorer" data-explorer="replication">
+    <div class="title"><span class="tagx">Explorer</span><h3>Three copies of one record</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">A student's balance is stored on three nodes. Write to node 1, let time pass, and read from different nodes. Take a node offline and see which read mode still answers.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<div class="part" id="practise" data-nav="D · Practise"><span class="letter">D</span><h2>Practise</h2><p>Match the problem to the family.</p></div>
+<section id="d-choose" data-nav="Which family?">
+  <figure class="figure explorer" data-explorer="family">
+    <div class="title"><span class="tagx">Activity</span><h3>Which family would you choose?</h3></div>
+    <p class="caption">Pick a family for each scenario, then check. Several answers can be defended: read the reasoning.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<div class="part" id="independent" data-nav="E · Independent"><span class="letter">E</span><h2>Complete independently</h2><p>Reading and the Week 2 practicals.</p></div>
+<section id="e-work" data-nav="Independent work">
+  <ul class="list prose">
+    <li>Practicals 3 and 4 are on the <a href="mongodb.html#independent">MongoDB page, Part E</a>.</li>
+    <li>Read Ploetz (2018) <i>Seven NoSQL Databases in a Week</i>, chapter 1, for a tour of the families (module reading list).</li>
+    <li>Pick one database from the families table that the module does not cover (Redis or Cassandra) and find, in its documentation: its data model, its query language, and how it handles consistency. One paragraph each: this is the "learn a new database yourself" skill the lecture asks for.</li>
+  </ul>
+</section>
+
+<div class="part" id="check" data-nav="F · Check"><span class="letter">F</span><h2>Check your understanding</h2><p>Quiz, misconceptions and key terms.</p></div>
+<section id="f-quiz" data-nav="Quiz">
+  <div class="sec-head"><span class="sec-num">F1</span><h3>Quiz</h3></div>
+  <div class="quiz" data-quiz="nosql"></div>
+</section>
+<section id="f-mis" data-nav="Misconceptions">
+  <div class="sec-head"><span class="sec-num">F2</span><h3>Common misconceptions</h3></div>
+  <div class="tbl"><table><thead><tr><th>Students often say…</th><th>Correct it to…</th></tr></thead><tbody>
+    <tr><td>"NoSQL means no SQL at all."</td><td>Usually "not only SQL": many NoSQL databases have SQL-like languages.</td></tr>
+    <tr><td>"NoSQL is for unstructured data."</td><td>Most NoSQL databases hold structured or semi-structured data in a flexible model. Truly unstructured data (video) usually lives in files.</td></tr>
+    <tr><td>"NoSQL replaces relational databases."</td><td>Each family fits different data and questions; most real systems use several (polyglot persistence).</td></tr>
+    <tr><td>"Eventually consistent means sometimes wrong forever."</td><td>Copies converge once the write has propagated; the window is usually milliseconds to seconds.</td></tr>
+    <tr><td>"Relational databases cannot scale."</td><td>They scale up well and can scale out, but with more cost and effort.</td></tr>
+  </tbody></table></div>
+</section>
+<section id="f-gloss" data-nav="Key terms">
+  <div class="sec-head"><span class="sec-num">F3</span><h3>Key terms</h3></div>
+  <dl class="gloss"><dt id="gn-acid">ACID</dt><dd>Atomicity, Consistency, Isolation, Durability: relational transaction guarantees.</dd><dt id="gn-base">BASE</dt><dd>Basically Available, Soft state, Eventually consistent: the trade-off many NoSQL systems make.</dd><dt id="gn-cap-theorem">CAP theorem</dt><dd>During a network partition a distributed database must choose consistency or availability (beyond the lecture).</dd><dt id="gn-eventual-consistency">Eventual consistency</dt><dd>Copies may differ briefly after a write but converge once it propagates.</dd><dt id="gn-key-value-store">Key-value store</dt><dd>Stores a value under a unique key; the simplest NoSQL model.</dd><dt id="gn-nosql">NoSQL</dt><dd>&quot;Not only SQL&quot;: non-relational databases, usually built to scale out.</dd><dt id="gn-replication">Replication</dt><dd>Keeping copies of the same data on several nodes.</dd><dt id="gn-scaling-out-up">Scaling out / up</dt><dd>Adding more machines / a bigger machine.</dd><dt id="gn-sharding">Sharding</dt><dd>Splitting a collection across nodes by a key (partitioning).</dd><dt id="gn-stale-read">Stale read</dt><dd>Reading an old value from a copy that has not received the latest write.</dd><dt id="gn-wide-column-store">Wide-column store</dt><dd>Rows with flexible column families, built for very large write volumes (Cassandra, HBase).</dd></dl>
+</section>
+<section id="f-exit" data-nav="Exit self-check">
+  <div class="sec-head"><span class="sec-num">F4</span><h3>Exit self-check</h3></div>
+  <div class="rate">
+    <div class="rate-row" data-key="term"><span>I can explain what NoSQL means and where the name came from.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="families"><span>I can name the families with an example and a use case for each.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="ec"><span>I can explain eventual consistency and a stale read.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+  </div>
+</section>
+
+<nav class="pager" aria-label="Topic navigation">
+  <a href="relational.html"><span class="k">Previous · Week 1</span>Relational databases and MySQL</a>
+  <a class="nx" href="mongodb.html"><span class="k">Next · Week 2</span>Document databases and MongoDB</a>
+</nav>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · 2026/27</span><span>Concept topic: simulations are labelled.</span></footer>
+</div>
+</div>
+<script src="../assets/js/schedule.js"></script>
+<script src="../assets/js/search-index.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/demos-mongodb.js"></script>
+<script src="../assets/js/nosql.js"></script>
+</body>
+</html>

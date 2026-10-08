@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 Datasets and Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-root="" data-page="labs">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure</span>
+  <h1>Datasets and lab setup</h1>
+  <p class="lead">One synthetic university dataset runs through the database weeks, so you meet the same students and modules in MySQL, MongoDB and beyond. This page documents it and says where each lab runs.</p>
+</header>
+
+<section id="where" data-nav="Where each lab runs">
+  <div class="sec-head"><h2>Where each lab runs</h2></div>
+  <div class="tbl"><table><thead><tr><th>Weeks</th><th>Technology</th><th>Lab PCs</th><th>Your own laptop</th></tr></thead><tbody>
+    <tr><td>1</td><td>MySQL Server 8.0 + MySQL Workbench</td><td>Installed</td><td>Yes: MySQL Installer (Windows) or DMG (macOS)</td></tr>
+    <tr><td>2</td><td>MongoDB + mongosh + Compass</td><td>Installed</td><td>Yes (guide with the Week 2 topic)</td></tr>
+    <tr><td>3</td><td>InfluxDB 1.8 (InfluxQL)</td><td>Zip from Blackboard (Supporting Resources &gt; Software), no installation</td><td>Yes: InfluxDB 1.8 (guide in the Week 3 topic, Part E1)</td></tr>
+    <tr><td>4</td><td>Neo4j + Neo4j Browser</td><td>Installed (Start menu)</td><td>Yes: Neo4j Desktop (guide in the Week 4 topic, Part E1)</td></tr>
+    <tr><td>6-11</td><td>Hadoop, HDFS, Hive, Spark (PySpark), Pig, Zeppelin</td><td><b>HDP 2.6 sandbox</b>, already installed</td><td>Not recommended: the sandbox needs a lot of memory. Use the lab PCs or the virtual machine.</td></tr>
+  </tbody></table></div>
+  <p class="note">Each topic page has its own setup steps and troubleshooting in Part E.</p>
+</section>
+
+<section id="university" data-nav="University dataset">
+  <div class="sec-head"><h2>The university dataset (<code>university_db</code>)</h2></div>
+  <div class="prose">
+    <p>Built from the Practical 0 scenario: lecturers, courses, modules and students, plus the registrations that link students to modules. All names, emails and dates are invented.</p>
+    <p><b>Files:</b> <a href="data/university/university_schema.sql">university_schema.sql</a> (tables and constraints) and <a href="data/university/university_seed.sql">university_seed.sql</a> (rows). Run them in that order in MySQL Workbench or with <code>mysql -u root -p &lt; university_schema.sql</code>. Running the schema script again drops and rebuilds the database, which is how you reset it.</p>
+  </div>
+  <div class="kpis"><div class="kpi"><span>Lecturer</span><b>6</b></div><div class="kpi"><span>Course</span><b>3</b></div><div class="kpi"><span>Module</span><b>6</b></div><div class="kpi"><span>CourseModule</span><b>12</b></div><div class="kpi"><span>Student</span><b>24</b></div><div class="kpi"><span>Registration</span><b>26</b></div></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Deliberate teaching cases</span><ul class="list">
+      <li><b>John Smith (1003)</b> has no registrations: shows LEFT JOIN and NULL.</li>
+      <li><b>COM750 Artificial Intelligence</b> has no students: insertion anomaly, COUNT(*) vs COUNT(column).</li>
+      <li><b>Dr Thomas Harris (6)</b> delivers no module: partial participation.</li>
+      <li><b>Ryan O'Neill (1023)</b>: an apostrophe to escape (<code>'O''Neill'</code>).</li>
+      <li><b>Emma Brown (1018)</b> shares a surname with Dr Brown: why names are not keys.</li>
+      <li>Half the students have no <b>Mobile</b>: practise IS NULL.</li>
+    </ul></div>
+    <div class="card"><span class="k">Rules the database enforces</span><ul class="list">
+      <li>Lecturer rank 1-40; course level 4-8; student enrolment level 1-20; credits &gt; 0 (CHECK).</li>
+      <li>Every course has a coordinator and every module a lecturer (NOT NULL foreign keys).</li>
+      <li>Emails are unique for students and for lecturers.</li>
+      <li>A student registers on a module at most once (composite primary key).</li>
+      <li>New students are 'Active' unless stated (DEFAULT).</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="mongo" data-nav="MongoDB version">
+  <div class="sec-head"><h2>The same university as documents (MongoDB)</h2></div>
+  <div class="prose">
+    <p><b>File:</b> <a href="data/university/university_mongo.js">university_mongo.js</a>. In mongosh, from the folder holding it: <code>load('university_mongo.js')</code>. It drops and rebuilds <code>uni_db</code> and prints the counts: 6 lecturers, 3 courses, 6 modules, 24 students.</p>
+    <p>One reasonable document design (Practical 3 asks you to devise your own): students <b>embed</b> their registrations; modules and courses <b>reference</b> lecturers by <code>_id</code>; courses list their module codes. Values that are NULL in MySQL are left out of the documents.</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Collection</th><th>Shape</th><th>From MySQL</th></tr></thead><tbody>
+    <tr><td class="m">lecturers</td><td class="m">{ _id: 1, name: { forename, middle?, surname }, dateOfBirth, email, rank }</td><td>Lecturer</td></tr>
+    <tr><td class="m">courses</td><td class="m">{ _id: 'MSCCST', name, level, coordinatorId, modules: ['COM745', …] }</td><td>Course + CourseModule</td></tr>
+    <tr><td class="m">modules</td><td class="m">{ _id: 'COM745', name, credits, lecturerId }</td><td>Module</td></tr>
+    <tr><td class="m">students</td><td class="m">{ _id: 1001, forename, middleName?, surname, dateOfBirth, email, mobile?, level, course, status, registrations: [ { module, date, semester } ] }</td><td>Student + Registration</td></tr>
+  </tbody></table></div>
+  <p class="note">The documents are generated from the MySQL tables by a script, so both versions always hold the same people, modules and registrations.</p>
+</section>
+
+<section id="graph" data-nav="University graph (Neo4j)">
+  <div class="sec-head"><h2>The same university as a graph (Neo4j)</h2></div>
+  <div class="prose">
+    <p><b>File:</b> <a href="data/university/university_graph.cypher">university_graph.cypher</a>. Paste it into Neo4j Browser (multi-statement editor on) or run <code>cypher-shell -f university_graph.cypher</code>. It <b>deletes everything</b> in the database, then creates 39 nodes and 71 relationships, and lists the node counts. Also: <a href="data/university/friends_books.cypher">friends_books.cypher</a>, the two-friends-and-a-book example from Lecture 6.</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Element</th><th>Properties</th><th>From MySQL</th><th>Count</th></tr></thead><tbody>
+    <tr><td class="m">(:Lecturer)</td><td class="m">id, name, email, rank</td><td>Lecturer</td><td>6</td></tr>
+    <tr><td class="m">(:Course)</td><td class="m">code, name, level</td><td>Course</td><td>3</td></tr>
+    <tr><td class="m">(:Module)</td><td class="m">code, name, credits</td><td>Module</td><td>6</td></tr>
+    <tr><td class="m">(:Student)</td><td class="m">id, name, email, mobile?, level, status</td><td>Student</td><td>24</td></tr>
+    <tr><td class="m">-[:ENROLLED_ON]-&gt;</td><td>Student to Course</td><td>Student.CourseCode</td><td>24</td></tr>
+    <tr><td class="m">-[:REGISTERED_ON {semester, date}]-&gt;</td><td>Student to Module</td><td>Registration</td><td>26</td></tr>
+    <tr><td class="m">-[:TEACHES]-&gt;</td><td>Lecturer to Module</td><td>Module.LecturerID</td><td>6</td></tr>
+    <tr><td class="m">-[:COORDINATES]-&gt;</td><td>Lecturer to Course</td><td>Course.CoordinatorID</td><td>3</td></tr>
+    <tr><td class="m">-[:INCLUDES]-&gt;</td><td>Course to Module</td><td>CourseModule</td><td>12</td></tr>
+  </tbody></table></div>
+  <p class="note">Generated from the MySQL tables by a script, like the MongoDB version. Dates are stored as text (<code>'2026-09-28'</code>) so the file also runs on other Cypher databases; in Neo4j you could use <code>date('2026-09-28')</code>.</p>
+</section>
+
+<section id="campus" data-nav="Campus sensor data (InfluxDB)">
+  <div class="sec-head"><h2>Smart-campus sensor data (InfluxDB)</h2></div>
+  <div class="prose">
+    <p><b>File:</b> <a href="data/campus/campus_sensors.txt">campus_sensors.txt</a> (synthetic). Load it from a terminal, in the folder holding the file: <code>influx -import -path=campus_sensors.txt -precision=s</code>. It creates the database <code>campus</code> and reports 95 inserts, 0 failed.</p>
+    <p>Three campus rooms on one teaching day, Monday 2 February 2026, 08:00-18:00 UTC (UK time in February is UTC). Occupancy follows a timetable; CO2 and temperature rise when a room is in use. One lab_2 reading, at 12:30, is missing on purpose so that <code>fill()</code> has something to fill.</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Measurement</th><th>Tags</th><th>Fields</th><th>Points</th></tr></thead><tbody>
+    <tr><td class="m">room_env</td><td class="m">room (lab_1, lab_2, lecture_a), room_type (lab, lecture)</td><td class="m">temp_c (float), humidity (float), co2_ppm (integer), occupancy (integer)</td><td>62: every 30 minutes, 21 per room (lab_2: 20)</td></tr>
+    <tr><td class="m">energy</td><td class="m">room</td><td class="m">kwh (float)</td><td>33: hourly, 11 per room</td></tr>
+  </tbody></table></div>
+  <p class="note">Rooms: lab_1 (capacity 30), lab_2 (24), lecture_a (80). The file is in <code>influx -import</code> format: a <code># DDL</code> section with CREATE DATABASE, then a <code># DML</code> section of line-protocol points with second timestamps.</p>
+</section>
+
+<section id="dictionary" data-nav="Data dictionary">
+  <div class="sec-head"><h2>Data dictionary</h2></div>
+  <p class="note">Read from MySQL's <code>information_schema</code> after running both scripts on MySQL 8.0.46, so it always matches the files.</p>
+  <h3 id="t-lecturer" style="margin-top:8px"><code>Lecturer</code> <small class="note">6 rows</small></h3><p class="note">Academic staff. P0: &quot;unique employee numbers … rank of seniority 1-40&quot;. Called Tutor in the Lectures 1-2 notes.</p><div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th>NULL?</th><th>Key</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td class="m">LecturerID</td><td class="m">int</td><td>no</td><td class="m">PK</td><td class="m"></td><td>Employee number</td></tr><tr><td class="m">Forename</td><td class="m">varchar(50)</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">MiddleName</td><td class="m">varchar(50)</td><td>yes</td><td class="m"></td><td class="m"></td><td>Optional</td></tr><tr><td class="m">Surname</td><td class="m">varchar(50)</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">DateOfBirth</td><td class="m">date</td><td>yes</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">Email</td><td class="m">varchar(100)</td><td>no</td><td class="m">UNIQUE</td><td class="m"></td><td>Alternate key</td></tr><tr><td class="m">RankLevel</td><td class="m">tinyint</td><td>no</td><td class="m"></td><td class="m"></td><td>Seniority 1-40 (RANK is reserved in MySQL 8)</td></tr></tbody></table></div><ul class="list note"><li class="m">chk_lecturer_rank: (`RankLevel` between 1 and 40)</li></ul>
+<h3 id="t-course" style="margin-top:8px"><code>Course</code> <small class="note">3 rows</small></h3><p class="note">A programme of study, coordinated by one lecturer.</p><div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th>NULL?</th><th>Key</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td class="m">CourseCode</td><td class="m">varchar(10)</td><td>no</td><td class="m">PK</td><td class="m"></td><td>e.g. MSCCST</td></tr><tr><td class="m">CourseName</td><td class="m">varchar(100)</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">AccreditationLevel</td><td class="m">tinyint</td><td>no</td><td class="m"></td><td class="m"></td><td>Level 4-8</td></tr><tr><td class="m">CoordinatorID</td><td class="m">int</td><td>no</td><td class="m">FK → Lecturer</td><td class="m"></td><td>The coordinating lecturer</td></tr></tbody></table></div><ul class="list note"><li class="m">chk_course_level: (`AccreditationLevel` between 4 and 8)</li></ul>
+<h3 id="t-module" style="margin-top:8px"><code>Module</code> <small class="note">6 rows</small></h3><p class="note">A unit of study delivered by one lecturer.</p><div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th>NULL?</th><th>Key</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td class="m">ModuleCode</td><td class="m">varchar(10)</td><td>no</td><td class="m">PK</td><td class="m"></td><td>e.g. COM745</td></tr><tr><td class="m">ModuleName</td><td class="m">varchar(100)</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">Credits</td><td class="m">tinyint</td><td>no</td><td class="m"></td><td class="m"></td><td>Credit points, &gt; 0</td></tr><tr><td class="m">LecturerID</td><td class="m">int</td><td>no</td><td class="m">FK → Lecturer</td><td class="m"></td><td>The delivering lecturer</td></tr></tbody></table></div><ul class="list note"><li class="m">chk_module_credits: (`Credits` &gt; 0)</li></ul>
+<h3 id="t-coursemodule" style="margin-top:8px"><code>CourseModule</code> <small class="note">12 rows</small></h3><p class="note">Which modules make up which course (M:N).</p><div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th>NULL?</th><th>Key</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td class="m">CourseCode</td><td class="m">varchar(10)</td><td>no</td><td class="m">PK, FK → Course</td><td class="m"></td><td></td></tr><tr><td class="m">ModuleCode</td><td class="m">varchar(10)</td><td>no</td><td class="m">PK, FK → Module</td><td class="m"></td><td></td></tr></tbody></table></div>
+<h3 id="t-student" style="margin-top:8px"><code>Student</code> <small class="note">24 rows</small></h3><p class="note">A student enrolled on one course.</p><div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th>NULL?</th><th>Key</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td class="m">StudentID</td><td class="m">int</td><td>no</td><td class="m">PK</td><td class="m"></td><td>Student number</td></tr><tr><td class="m">Forename</td><td class="m">varchar(50)</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">MiddleName</td><td class="m">varchar(50)</td><td>yes</td><td class="m"></td><td class="m"></td><td>Optional</td></tr><tr><td class="m">Surname</td><td class="m">varchar(50)</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">DateOfBirth</td><td class="m">date</td><td>yes</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">Email</td><td class="m">varchar(100)</td><td>no</td><td class="m">UNIQUE</td><td class="m"></td><td>Alternate key</td></tr><tr><td class="m">Mobile</td><td class="m">varchar(20)</td><td>yes</td><td class="m"></td><td class="m"></td><td>Text, not a number; often NULL</td></tr><tr><td class="m">EnrolmentLevel</td><td class="m">tinyint</td><td>no</td><td class="m"></td><td class="m"></td><td>Level 1-20</td></tr><tr><td class="m">CourseCode</td><td class="m">varchar(10)</td><td>no</td><td class="m">FK → Course</td><td class="m"></td><td>The student&#x27;s course</td></tr><tr><td class="m">Status</td><td class="m">varchar(20)</td><td>no</td><td class="m"></td><td class="m">Active</td><td>Defaults to Active</td></tr></tbody></table></div><ul class="list note"><li class="m">chk_student_level: (`EnrolmentLevel` between 1 and 20)</li></ul>
+<h3 id="t-registration" style="margin-top:8px"><code>Registration</code> <small class="note">26 rows</small></h3><p class="note">A student registered on a module (M:N), with when it happened.</p><div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th>NULL?</th><th>Key</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td class="m">StudentID</td><td class="m">int</td><td>no</td><td class="m">PK, FK → Student</td><td class="m"></td><td></td></tr><tr><td class="m">ModuleCode</td><td class="m">varchar(10)</td><td>no</td><td class="m">PK, FK → Module</td><td class="m"></td><td></td></tr><tr><td class="m">RegistrationDate</td><td class="m">date</td><td>no</td><td class="m"></td><td class="m"></td><td></td></tr><tr><td class="m">Semester</td><td class="m">varchar(20)</td><td>no</td><td class="m"></td><td class="m"></td><td>e.g. Semester 1</td></tr></tbody></table></div>
+</section>
+
+<section id="other" data-nav="Other datasets">
+  <div class="sec-head"><h2>Other datasets in the module</h2></div>
+  <div class="tbl"><table><thead><tr><th>File</th><th>Rows</th><th>Used in</th></tr></thead><tbody>
+    <tr><td class="m">sf-salaries-2011-2013.csv</td><td>110,531 + header</td><td>HDFS I and II (Practicals 15-16)</td></tr>
+    <tr><td class="m">sf-salaries-2014.csv</td><td>38,123 (no header row)</td><td>HDFS I and II</td></tr>
+    <tr><td class="m">trucks.csv, geolocation.csv</td><td>100 / 8,000</td><td>Hive, Spark III, Zeppelin (Practicals 19-21). trucks.csv uses old Mac line endings: a fixed copy will be supplied with the Hive topic.</td></tr>
+    <tr><td class="m">truck_event_text_partition.csv, drivers.csv, timesheet.csv</td><td>17,075 / 34 / 1,768</td><td>Pig I and II (Practicals 22-23)</td></tr>
+    <tr><td class="m">climate_change_data.csv, cities_weather_dataset.csv</td><td>10,000 / 200</td><td>Not used in the practicals (the InfluxDB topic uses the synthetic campus data). Optional extension: convert one to line protocol and import it after Practical 7.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="badges" data-nav="What the badges mean">
+  <div class="sec-head"><h2>What the badges mean</h2></div>
+  <div class="tbl"><table><tbody>
+    <tr><td><span class="badge b-ver">Verified</span></td><td>The output shown was captured by running the code on the real software (version named on the badge).</td></tr>
+    <tr><td><span class="badge b-emu">Checked with a MongoDB emulator</span></td><td>Produced by a MongoDB emulator (mingo) and cross-checked by a second, independent one (mongomock). Not yet run on a MongoDB server.</td></tr>
+    <tr><td><span class="badge b-emu">Checked with a Cypher emulator</span></td><td>Produced by a Cypher engine written for this site and replayed on FalkorDB, a separate graph database; differences are only where the two products are documented to differ. Not yet run on Neo4j.</td></tr>
+    <tr><td><span class="badge b-real">Real SQLite engine</span></td><td>Your query runs on a real database engine inside the page. It is SQLite, not MySQL, so a few details differ (listed beside the playground).</td></tr>
+    <tr><td><span class="badge b-emu">InfluxQL emulator</span></td><td>The InfluxDB playground and explorers run a small InfluxQL engine written for this site. Its output was compared with a real InfluxDB server on every demonstration and practice command; the demonstrations themselves show what the real server printed.</td></tr>
+    <tr><td><span class="badge b-sim">Simulation</span></td><td>A teaching model that shows the idea. Its numbers are illustrative, not measured.</td></tr>
+    <tr><td><span class="badge b-lab">Board work</span></td><td>A design demonstration with no code to run.</td></tr>
+  </tbody></table></div>
+</section>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · 2026/27</span><span>Synthetic data only.</span></footer>
+</div>
+</div>
+<script src="assets/js/schedule.js"></script>
+<script src="assets/js/search-index.js"></script>
+<script src="assets/js/site.js"></script>
+</body>
+</html>

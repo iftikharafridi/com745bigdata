@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 Demo Presenter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body class="presenter" data-root="" data-page="presenter">
+<div class="pres">
+  <header class="pres-top">
+    <a class="btn" href="demos.html" aria-label="Back to the demonstration library">← Library</a>
+    <span class="t" id="ptitle">Demonstration</span>
+    <label class="visually-hidden" for="pick">Choose a demonstration</label>
+    <select id="pick" class="btn"></select>
+    <button type="button" class="theme-btn"></button>
+  </header>
+
+  <main class="pres-body" id="stage" aria-live="polite"></main>
+
+  <footer class="pres-bot" aria-label="Presenter controls">
+    <button type="button" class="btn" id="prev" title="Previous step (←)">← Previous</button>
+    <button type="button" class="btn primary" id="next" title="Next step (→ or Space)">Next →</button>
+    <button type="button" class="btn" id="reset" title="Back to the start (R)">Reset</button>
+    <span class="dots" id="dots"></span>
+    <span class="spacer"></span>
+    <button type="button" class="btn" id="tcode" aria-pressed="false" title="Reveal code (C)">Reveal code</button>
+    <button type="button" class="btn" id="tout" aria-pressed="false" title="Reveal result (O)">Reveal result</button>
+    <button type="button" class="btn" id="tsay" aria-pressed="false" title="Reveal explanation (E)">Reveal explanation</button>
+    <button type="button" class="btn" id="tall" aria-pressed="false" title="Show everything on every step (A)">Show all</button>
+    <button type="button" class="btn" id="zout" aria-label="Smaller text">A−</button>
+    <button type="button" class="btn" id="zin" aria-label="Larger text">A+</button>
+  </footer>
+</div>
+
+<script src="assets/js/schedule.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/demos-relational.js"></script>
+<script src="assets/js/demos-mongodb.js"></script>
+<script src="assets/js/demos-influx.js"></script>
+<script src="assets/js/demos-neo4j.js"></script>
+<script>
+(function () {
+  var C = window.COM745, esc = C.esc;
+  // every demo from every topic file, in library order
+  var all = [];
+  Object.keys(C.DEMOS || {}).forEach(function (topic) {
+    var pack = C.DEMOS[topic];
+    pack.demos.forEach(function (d) { all.push({ topic: topic, engine: pack.engine, badge: pack.badgeText || ('Verified on ' + pack.engine), bcls: pack.badgeClass || 'b-ver', lang: pack.lang || 'sql', d: d }); });
+  });
+  var pick = document.getElementById('pick');
+  all.forEach(function (x, i) {
+    var o = document.createElement('option');
+    o.value = x.d.id; o.textContent = ({ relational: 'MySQL', mongodb: 'MongoDB', influxdb: 'InfluxDB', neo4j: 'Neo4j' }[x.topic] || x.topic) + ' ' + x.d.num + ': ' + x.d.title;
+    pick.appendChild(o);
+  });
+
+  var cur = null, step = 0, seen = {};
+  var showAll = C.store.get('pres:all', false);
+  var zoom = C.store.get('pres:zoom', 1);
+  var rev = { code: false, out: false, say: false };
+
+  function load(id) {
+    cur = all.filter(function (x) { return x.d.id === id; })[0] || all[0];
+    pick.value = cur.d.id;
+    document.getElementById('ptitle').textContent = 'Demo ' + cur.d.num + ' · ' + cur.d.title;
+    document.title = 'COM745 Demo ' + cur.d.num;
+    step = 0; seen = {};
+    if (location.hash.slice(1) !== cur.d.id) history.replaceState(null, '', '#' + cur.d.id);
+    render();
+  }
+  function total() { return cur.d.steps.length + 2; }   // overview + steps + wrap-up
+
+  function transcript(out) {
+    // mysql-client style transcript: the statement (abridged), then its result
+    return out.map(function (r) {
+      var lines = r.sql.split('\n');
+      var shown = lines.length > 3 ? lines.slice(0, 2).concat(['    …']) : lines;
+      var p0 = r.prompt ? r.prompt + ' ' : 'mysql> ';
+      var prompt = shown.map(function (l, i) { return (i ? (r.prompt ? '... ' : '    -> ') : p0) + l; }).join('\n') + (r.prompt ? '' : ';');
+      var cls = r.kind === 'error' ? 'err' : (r.kind === 'ok' ? 'ok' : '');
+      return '<span class="ok">' + esc(prompt) + '</span>\n' + (cls ? '<span class="' + cls + '">' + esc(r.text) + '</span>' : esc(r.text));
+    }).join('\n\n');
+  }
+
+  function render() {
+    var d = cur.d, st = document.getElementById('stage'), n = total();
+    document.documentElement.style.setProperty('--zoom', zoom);
+    var html = '';
+    if (step === 0) {
+      html += '<span class="stepn">Demo ' + d.num + ' · about ' + d.minutes + ' minutes · ' + (d.steps.length) + ' steps</span>';
+      html += '<h2>' + esc(d.title) + '</h2>';
+      html += '<p class="lead">' + esc(d.objective) + '</p>';
+      html += '<div class="meta-grid">';
+      html += '<div class="card"><span class="k">Before you start</span><ul class="list">' + d.prerequisites.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></div>';
+      html += '<div class="card"><span class="k">Dataset</span><p>' + esc(d.dataset) + '</p></div>';
+      html += '<div class="card"><span class="k">Results shown</span><p>' + (d.setup === 'none' && !d.steps.some(function (s) { return s.sql; }) ? 'Board work: no code to run.' : (cur.bcls === 'b-ver' ? 'Every result was captured by running the code on <b>' + esc(cur.engine) + '</b>. Your timings and minor formatting may differ.' : (cur.topic === 'neo4j' ? 'Results come from a Cypher emulator, laid out like cypher-shell (Browser\'s Text view), and were replayed on FalkorDB, a separate graph database. They have not yet been run on Neo4j; property order, ids and error wording may differ slightly.' : 'Results come from a MongoDB emulator and were cross-checked by a second, independent one. They have not yet been run on a MongoDB server; ObjectIds and layout will differ slightly on yours.'))) + '</p><span class="badge ' + cur.bcls + '">' + esc(cur.badge) + '</span></div>';
+      html += '</div>';
+      html += '<p class="note">Keys: → or Space next · ← previous · C code · O result · E explanation · A show all · R reset</p>';
+    } else if (step <= d.steps.length) {
+      var s = d.steps[step - 1];
+      var R = { code: showAll || rev.code, out: showAll || rev.out, say: showAll || rev.say };
+      html += '<span class="stepn">Step ' + step + ' of ' + d.steps.length + '</span>';
+      html += '<h2>' + esc(s.title) + '</h2>';
+      if (s.ask) html += '<p class="ask"><b>Ask:</b> ' + esc(s.ask) + '</p>';
+      if (s.board) html += '<pre class="board">' + esc(s.board) + '</pre>';
+      if (s.sql) {
+        html += R.code ? '<div class="code" data-lang="' + (s.lang || cur.lang) + '"><pre>' + esc(s.sql) + '</pre></div>'
+                       : '<button type="button" class="btn" data-rev="code">Reveal code</button>';
+      }
+      if (s.out) {
+        if (R.out) {
+          html += '<div class="output' + (cur.bcls === 'b-emu' ? ' emu' : '') + '"><div class="output-head"><span class="badge ' + cur.bcls + '">' + esc(cur.badge) + '</span>' + (s.trimmed ? '<span>EXPLAIN / SHOW columns trimmed to the ones discussed</span>' : '') + '</div><pre>' + transcript(s.out) + '</pre></div>';
+        } else if (s.sql) {
+          html += '<button type="button" class="btn" data-rev="out">Reveal result</button>';
+        }
+      }
+      if (s.say) {
+        html += R.say ? '<p class="say"><b>Explain:</b> ' + esc(s.say) + '</p>'
+                      : '<button type="button" class="btn" data-rev="say">Reveal explanation</button>';
+      }
+    } else {
+      html += '<span class="stepn">Wrap-up</span><h2>Common errors, variations and practice</h2>';
+      html += '<div class="tbl"><table><thead><tr><th>You see</th><th>What it means and the fix</th></tr></thead><tbody>' +
+        d.errors.map(function (e) { return '<tr><td class="m">' + esc(e[0]) + '</td><td>' + esc(e[1]) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      html += '<div class="card"><span class="k">Variations to try live</span><ul class="list">' + d.variations.map(function (v) { return '<li>' + esc(v) + '</li>'; }).join('') + '</ul></div>';
+      html += '<div class="card"><span class="k">Student practice task</span><p>' + esc(d.practice.task) + '</p><details><summary>Hint</summary><p>' + esc(d.practice.hint) + '</p></details><p class="note">The worked solution is in the lecturer pack, not on the student site.</p></div>';
+    }
+    st.innerHTML = html;
+    C.decorateCode(st);
+    st.querySelectorAll('[data-rev]').forEach(function (b) {
+      b.addEventListener('click', function () { rev[b.dataset.rev] = true; render(); });
+    });
+    seen[step] = true;
+    var dots = document.getElementById('dots');
+    dots.innerHTML = '';
+    for (var i = 0; i < n; i++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = (i === step ? 'on' : (seen[i] ? 'seen' : ''));
+      b.setAttribute('aria-label', i === 0 ? 'Overview' : (i === n - 1 ? 'Wrap-up' : 'Step ' + i));
+      (function (k) { b.addEventListener('click', function () { go(k); }); })(i);
+      dots.appendChild(b);
+    }
+    document.getElementById('prev').disabled = step === 0;
+    document.getElementById('next').disabled = step === n - 1;
+    ['code', 'out', 'say'].forEach(function (k) {
+      var b = document.getElementById('t' + k);
+      b.setAttribute('aria-pressed', String(showAll || rev[k]));
+      b.disabled = showAll;
+    });
+    document.getElementById('tall').setAttribute('aria-pressed', String(showAll));
+  }
+  function go(k) {
+    step = Math.max(0, Math.min(total() - 1, k));
+    rev = { code: false, out: false, say: false };
+    render(); window.scrollTo(0, 0);
+  }
+  function toggle(k) { if (!showAll) { rev[k] = !rev[k]; render(); } }
+  document.getElementById('prev').addEventListener('click', function () { go(step - 1); });
+  document.getElementById('next').addEventListener('click', function () { go(step + 1); });
+  document.getElementById('reset').addEventListener('click', function () { seen = {}; go(0); });
+  document.getElementById('tcode').addEventListener('click', function () { toggle('code'); });
+  document.getElementById('tout').addEventListener('click', function () { toggle('out'); });
+  document.getElementById('tsay').addEventListener('click', function () { toggle('say'); });
+  document.getElementById('tall').addEventListener('click', function () { showAll = !showAll; C.store.set('pres:all', showAll); render(); });
+  document.getElementById('zin').addEventListener('click', function () { zoom = Math.min(1.8, +(zoom + 0.1).toFixed(2)); C.store.set('pres:zoom', zoom); render(); });
+  document.getElementById('zout').addEventListener('click', function () { zoom = Math.max(0.8, +(zoom - 0.1).toFixed(2)); C.store.set('pres:zoom', zoom); render(); });
+  pick.addEventListener('change', function () { load(pick.value); });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input, select, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
+    var k = e.key.toLowerCase();
+    if (k === 'arrowright' || k === ' ' || k === 'pagedown') { e.preventDefault(); go(step + 1); }
+    else if (k === 'arrowleft' || k === 'pageup') { e.preventDefault(); go(step - 1); }
+    else if (k === 'r') go(0);
+    else if (k === 'c') toggle('code');
+    else if (k === 'o') toggle('out');
+    else if (k === 'e') toggle('say');
+    else if (k === 'a') document.getElementById('tall').click();
+  });
+  window.addEventListener('hashchange', function () { if (location.hash.slice(1) !== cur.d.id) load(location.hash.slice(1)); });
+  load(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>

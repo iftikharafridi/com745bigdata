@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 Demonstration Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-root="" data-page="demos">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure</span>
+  <h1>Demonstration library</h1>
+  <p class="lead">Lecturer demonstrations, organised by technology. Each opens straight into presenter mode, so it can go on the projector without scrolling through notes.</p>
+</header>
+
+<section id="how-present" data-nav="Using presenter mode">
+  <div class="sec-head"><h2>Using presenter mode</h2></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Controls</span>
+      <div class="tbl"><table><tbody>
+        <tr><td class="m">→ / Space</td><td>Next step</td></tr>
+        <tr><td class="m">←</td><td>Previous step</td></tr>
+        <tr><td class="m">C · O · E</td><td>Reveal code · result · explanation</td></tr>
+        <tr><td class="m">A</td><td>Show everything on every step</td></tr>
+        <tr><td class="m">R</td><td>Reset to the overview</td></tr>
+        <tr><td class="m">A− / A+</td><td>Text size for the room</td></tr>
+      </tbody></table></div></div>
+    <div class="card"><span class="k">Each demonstration has</span>
+      <ul class="list"><li>Objective, prerequisites, dataset and timing</li><li>Step-by-step commands with a question to ask the class</li><li>The result of every command, captured on the real software</li><li>An explanation to reveal after students predict</li><li>Common errors and fixes, variations to try live</li><li>A student practice task (worked solutions are in the separate lecturer pack)</li></ul></div>
+  </div>
+</section>
+
+<section id="lib-mysql" data-nav="MySQL (Week 1)">
+  <div class="sec-head"><h2>Relational databases and MySQL</h2></div>
+  <p class="note">Week 1. Data: <a href="labs.html#university">university_db</a>. Topic page: <a href="topics/relational.html#demo">Relational and MySQL, Part B</a>.</p>
+  <div class="demos" data-demolist="relational"></div>
+</section>
+
+<section id="lib-mongo" data-nav="MongoDB (Week 2)">
+  <div class="sec-head"><h2>Document databases and MongoDB</h2></div>
+  <p class="note">Week 2. Data: <a href="labs.html#mongo">university_mongo.js</a>. Topic page: <a href="topics/mongodb.html#demo">MongoDB, Part B</a>. Outputs are emulator-checked until the verification script has been run on a lab PC.</p>
+  <div class="demos" data-demolist="mongodb"></div>
+</section>
+
+<section id="lib-influx" data-nav="InfluxDB (Week 3)">
+  <div class="sec-head"><h2>Time-series databases and InfluxDB</h2></div>
+  <p class="note">Week 3. Data: <a href="labs.html#campus">campus_sensors.txt</a>. Topic page: <a href="topics/influxdb.html#demo">InfluxDB, Part B</a>. Outputs captured on a real InfluxDB server.</p>
+  <div class="demos" data-demolist="influxdb"></div>
+</section>
+
+<section id="lib-neo4j" data-nav="Neo4j (Week 4)">
+  <div class="sec-head"><h2>Graph databases and Neo4j</h2></div>
+  <p class="note">Week 4. Data: <a href="labs.html#graph">university_graph.cypher</a>. Topic page: <a href="topics/neo4j.html#demo">Neo4j, Part B</a>. Outputs are emulator-checked (and replayed on FalkorDB) until the verification script has been run on a lab PC.</p>
+  <div class="demos" data-demolist="neo4j"></div>
+</section>
+
+<section id="lib-next" data-nav="Coming next">
+  <div class="sec-head"><h2>Coming next</h2></div>
+  <p class="prose">The big-data demonstrations (HDFS, Spark with PySpark, Hive, Pig, Zeppelin) will be written and checked against the HDP 2.6 sandbox used in the labs.</p>
+</section>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · 2026/27</span><span>Results marked "Verified" were captured on the software named on the badge.</span></footer>
+</div>
+</div>
+<script src="assets/js/schedule.js"></script>
+<script src="assets/js/search-index.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/demos-relational.js"></script>
+<script src="assets/js/demos-mongodb.js"></script>
+<script src="assets/js/demos-influx.js"></script>
+<script src="assets/js/demos-neo4j.js"></script>
+</body>
+</html>

@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 Relational Databases</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+</head>
+<body data-root="../" data-page="relational">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="../index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure · Week 1</span>
+  <h1>From data to a working relational database</h1>
+  <p class="lead">A university asks us for a database. By the end of this topic you will have designed it (ER model, mapping, normalisation), built it in MySQL, filled it with data, queried it with JOINs, and tested that it refuses bad data.</p>
+  <div class="chips">
+    <span class="chip">Lectures 0-2 · Practicals 0-1</span>
+    <span class="chip">MySQL 8.0 + Workbench</span>
+    <span class="chip">Dataset: <a href="../labs.html#university">university_db</a></span>
+    <span class="chip">Assessed in CW1 (LO1)</span>
+  </div>
+  <nav class="toc" aria-label="On this page">
+    <a href="#understand">A Understand</a><a href="#demo">B Watch</a><a href="#explore">C Explore</a><a href="#practise">D Practise</a><a href="#independent">E Practicals</a><a href="#check">F Check</a>
+  </nav>
+</header>
+
+<section id="outcomes" data-nav="Learning outcomes">
+  <div class="sec-head"><h2>What you will be able to do</h2></div>
+  <ul class="lo-list">
+    <li><span class="lo">T1</span><span>Classify data as structured, semi-structured or unstructured, and explain the Vs of Big Data.</span></li>
+    <li><span class="lo">T2</span><span>Explain the difference between a database, a DBMS and an RDBMS, and choose a database family for a kind of data.</span></li>
+    <li><span class="lo">T3</span><span>Use relational terms, explain NULL, and distinguish super, candidate, primary, alternate, composite and foreign keys.</span></li>
+    <li><span class="lo">T4</span><span>Turn a client brief into a Chen ER diagram with cardinality and participation, and map it to tables.</span></li>
+    <li><span class="lo">T5</span><span>Write functional dependencies, recognise anomalies and normalise a table from UNF to 3NF.</span></li>
+    <li><span class="lo">T6</span><span>Build, populate and query the schema in MySQL, including multi-table JOINs and GROUP BY.</span></li>
+    <li><span class="lo">T7</span><span>Explain what indexes and ACID transactions are for, and test that a database enforces its business rules.</span></li>
+  </ul>
+  <p class="note">These build module learning outcome LO1 (assessed in CW1 in Week 7) and prepare LO2 and LO4. See the <a href="#lo-map">mapping in Part F</a>.</p>
+</section>
+
+<!-- ============================== A ============================== -->
+<div class="part" id="understand" data-nav="A · Understand"><span class="letter">A</span><h2>Understand</h2><p>The ideas, in the order you need them: from data to a tested design.</p></div>
+
+<section id="a-data" data-nav="Data and Big Data">
+  <div class="sec-head"><span class="sec-num">A1</span><h3>Data, and when it becomes Big Data</h3></div>
+  <div class="prose">
+    <p><b>Data</b> is recorded facts, observations or values. On its own it has little meaning; organised and put in context it becomes <b>information</b>. The same student can be stored in very different shapes:</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Form</th><th>Example</th><th>Usually lives in</th></tr></thead><tbody>
+    <tr><td><b>Structured</b></td><td class="m">1001 | Ahmed | Ali | MSCCST | 72</td><td>A table with fixed columns (relational database)</td></tr>
+    <tr><td><b>Semi-structured</b></td><td class="m">{"id": 1001, "name": "Ahmed Ali", "modules": ["COM745", "COM746"]}</td><td>JSON or XML documents (document database)</td></tr>
+    <tr><td><b>Unstructured</b></td><td>An email asking for an extension; a photo of his ID card</td><td>Files or object storage, with metadata in a database</td></tr>
+  </tbody></table></div>
+  <div class="prose">
+    <p>Notice the JSON record holds a <i>list</i> of modules inside one record. A relational table cannot do that in one cell; this comes back as First Normal Form in A9.</p>
+    <p><b>Big Data</b> is data whose <b>volume</b> (how much), <b>velocity</b> (how fast it arrives) or <b>variety</b> (how many shapes) makes it hard to store and process with traditional single-server tools. Two more Vs are often added: <b>veracity</b> (how trustworthy) and <b>value</b> (what it is worth). One V is enough to cause the problem: a small but very fast stream of sensor readings is "big" without being huge.</p>
+  </div>
+  <figure class="figure explorer" data-explorer="classifier">
+    <div class="title"><span class="tagx">Activity</span><h3>Classify the data</h3></div>
+    <p class="caption">Pick a form for each item, then check against the model answer. Some items are arguable: read the reasoning.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-families" data-nav="Which database for which data?">
+  <div class="sec-head"><span class="sec-num">A2</span><h3>Which database for which data?</h3></div>
+  <p class="prose">No database is best for everything. Each family is optimised for one shape of data and one pattern of use. This module visits four of them in turn.</p>
+  <div class="tbl"><table><thead><tr><th>Data and need</th><th>Family</th><th>In this module</th></tr></thead><tbody>
+    <tr><td>Structured, related data that must stay consistent</td><td>Relational</td><td><b>MySQL</b>, Week 1</td></tr>
+    <tr><td>Flexible or semi-structured documents</td><td>Document (NoSQL)</td><td>MongoDB, Week 2</td></tr>
+    <tr><td>Time-stamped sensor or monitoring data</td><td>Time-series</td><td>InfluxDB, Week 3</td></tr>
+    <tr><td>Highly connected data (who knows whom)</td><td>Graph (NoSQL)</td><td>Neo4j, Week 4</td></tr>
+    <tr><td>Very simple lookups by key at high speed</td><td>Key-value (NoSQL)</td><td>Mentioned (e.g. Redis)</td></tr>
+  </tbody></table></div>
+  <p class="callout warn">Avoid saying "NoSQL is for unstructured data". Many NoSQL systems suit flexible or semi-structured data; truly unstructured data (video, images) is usually stored as files, with its metadata in a database.</p>
+</section>
+
+<section id="a-dbms" data-nav="Database, DBMS, RDBMS">
+  <div class="sec-head"><span class="sec-num">A3</span><h3>Database, DBMS and RDBMS</h3></div>
+  <div class="prose">
+    <p>A <b>database</b> is an organised collection of related data that can be stored, retrieved and managed efficiently. Databases are older than computers: a phone book is one. Its <b>records</b> are entries, its <b>fields</b> are name, address and number, and its alphabetical order is an <b>index</b>. That index makes one question fast (find Khan) and others slow: finding everyone in Birmingham means reading every page. Two people called John Brown show that a name is not a <b>key</b>.</p>
+    <p>A university before databases kept separate filing cabinets for students, modules, lecturers and registrations, with the same student's address copied into several. That causes six problems a database management system is built to solve:</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Problem</th><th>At the university</th><th>DBMS answer</th></tr></thead><tbody>
+    <tr><td>Redundancy</td><td>Ahmed's address is in five files</td><td>Store each fact once (normalisation)</td></tr>
+    <tr><td>Inconsistency</td><td>Registry says "Ahmed Ali", Assessments says "A. Ali"</td><td>Keys and constraints</td></tr>
+    <tr><td>Difficult retrieval</td><td>"Which COM745 students does Dr Brown teach?" means pulling three cabinets</td><td>A query language (SQL)</td></tr>
+    <tr><td>Security</td><td>Hard to let lecturers see marks but not home addresses</td><td>Access control, views</td></tr>
+    <tr><td>Concurrent access</td><td>Two staff need the same paper file at once</td><td>Concurrency control, transactions</td></tr>
+    <tr><td>Backup and recovery</td><td>One spilled coffee and the record is gone</td><td>Logging, backup, durability</td></tr>
+  </tbody></table></div>
+  <ul class="list prose">
+    <li><b>Database</b>: the organised data itself (the library's books).</li>
+    <li><b>DBMS</b>: the software that creates, manages, queries and protects it (the librarian and catalogue).</li>
+    <li><b>RDBMS</b>: a DBMS based on the relational model: tables, keys and SQL. MySQL, PostgreSQL, SQL Server and Oracle are RDBMSs; MongoDB is a DBMS but not relational.</li>
+  </ul>
+</section>
+
+<section id="a-model" data-nav="Relational model and NULL">
+  <div class="sec-head"><span class="sec-num">A4</span><h3>The relational model, and NULL</h3></div>
+  <p class="prose">A relational database stores data in <b>tables</b> (relations) linked by <b>keys</b>, instead of repeating everything in one place. Textbooks and exam papers use two vocabularies; learn both.</p>
+  <div class="tbl"><table><thead><tr><th>Everyday / SQL term</th><th>Formal term</th><th>In the Student table</th></tr></thead><tbody>
+    <tr><td>Table</td><td>Relation</td><td class="m">Student</td></tr>
+    <tr><td>Row, record</td><td>Tuple</td><td class="m">1002, Sarah, Khan, …</td></tr>
+    <tr><td>Column, field</td><td>Attribute</td><td class="m">Email</td></tr>
+    <tr><td>Number of rows</td><td>Cardinality</td><td class="m">24</td></tr>
+    <tr><td>Number of columns</td><td>Degree</td><td class="m">10</td></tr>
+    <tr><td>Allowed values for a column</td><td>Domain</td><td class="m">Email: text up to 100 characters</td></tr>
+  </tbody></table></div>
+  <div class="prose">
+    <p>Row order has no meaning, and no two rows may be identical.</p>
+    <p><b>NULL</b> means a value is missing, unknown or not applicable. It is not zero and not an empty string. Three consequences:</p>
+    <ul class="list">
+      <li>NULL is not equal to anything, not even another NULL. <code>WHERE Mobile = NULL</code> finds nothing; write <code>WHERE Mobile IS NULL</code>.</li>
+      <li>NULL is where <i>partial participation</i> shows up ("a lecturer may teach no module"). Total participation becomes <code>NOT NULL</code>.</li>
+      <li>A primary key can never be NULL (entity integrity). Whether DateOfBirth or Email may be NULL is a business rule: ask the client.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="a-keys" data-nav="Keys">
+  <div class="sec-head"><span class="sec-num">A5</span><h3>Keys</h3></div>
+  <div class="tbl"><table><thead><tr><th>Key</th><th>Meaning</th><th>University example</th></tr></thead><tbody>
+    <tr><td>Super key</td><td>Any set of columns that uniquely identifies a row</td><td class="m">{StudentID}, {StudentID, Surname}</td></tr>
+    <tr><td>Candidate key</td><td>A <i>minimal</i> super key: remove any column and it stops being unique</td><td class="m">StudentID, Email, NationalNo</td></tr>
+    <tr><td>Primary key (PK)</td><td>The candidate key chosen as the main identifier; unique and never NULL</td><td class="m">StudentID</td></tr>
+    <tr><td>Alternate key</td><td>A candidate key not chosen as the PK; enforced with UNIQUE</td><td class="m">Email</td></tr>
+    <tr><td>Composite key</td><td>One key made of two or more columns together</td><td class="m">(StudentID, ModuleCode) in Registration</td></tr>
+    <tr><td>Foreign key (FK)</td><td>A column that refers to the PK of another (or the same) table</td><td class="m">LecturerID in Module</td></tr>
+  </tbody></table></div>
+  <figure class="figure explorer" data-explorer="keys">
+    <div class="title"><span class="tagx">Explorer</span><h3>Is it a key?</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Tick columns to test them as a key. There are two John Browns. Keys come from the business rules, not from whatever rows happen to be stored today.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-constraints" data-nav="Constraints and integrity">
+  <div class="sec-head"><span class="sec-num">A6</span><h3>Constraints protect the data</h3></div>
+  <div class="prose">
+    <p><b>Entity integrity</b>: a primary key value is unique and never NULL. <b>Referential integrity</b>: every foreign key value matches an existing primary key (or is NULL, if allowed); you cannot register student 9999 if there is no student 9999. A good design does not only store correct data: it stops incorrect data getting in.</p>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Constraint</th><th>Rule</th><th>Without it…</th><th>MySQL error</th></tr></thead><tbody>
+    <tr><td class="m">PRIMARY KEY</td><td>Unique and not NULL</td><td>Two rows could both be student 1001</td><td class="m">1062</td></tr>
+    <tr><td class="m">FOREIGN KEY</td><td>Value must exist in the referenced table</td><td>A registration for a module that doesn't exist</td><td class="m">1452 / 1451</td></tr>
+    <tr><td class="m">NOT NULL</td><td>A value must be supplied</td><td>A module with no lecturer</td><td class="m">1048</td></tr>
+    <tr><td class="m">UNIQUE</td><td>No duplicates (alternate keys)</td><td>Two students share one email</td><td class="m">1062</td></tr>
+    <tr><td class="m">CHECK</td><td>Value must pass a condition (MySQL 8.0.16+)</td><td>A module worth −10 credits</td><td class="m">3819</td></tr>
+    <tr><td class="m">DEFAULT</td><td>Value used when none is supplied</td><td>Every new student's status typed by hand</td><td>–</td></tr>
+  </tbody></table></div>
+  <p class="note">You will watch MySQL raise each of these errors in <a href="../demo.html#mysql-04-crud">Demo 4</a>, and can trigger them yourself in the <a href="#c-playground">playground</a>.</p>
+</section>
+
+<section id="a-er" data-nav="ER modelling (Chen)">
+  <div class="sec-head"><span class="sec-num">A7</span><h3>Design first: the lifecycle and ER modelling</h3></div>
+  <div class="prose">
+    <p>"A university asks us for a database. What do we do first?" Not open MySQL. A wrong design is expensive to fix once data is loaded, so developers follow a lifecycle, and testing often sends them back to the start.</p>
+  </div>
+  <figure class="figure"><svg viewBox="0 0 760 150" role="img" aria-label="Database development lifecycle: seven steps, with testing looping back to requirements"><defs><marker id="lc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs><rect x="6" y="30" width="94" height="56" rx="8" fill="var(--paper)" stroke="var(--line-strong)"/><text class="card-lab" x="53.0" y="22" text-anchor="middle" font-size="12">1</text><text class="lab" x="53.0" y="62" text-anchor="middle" font-size="12.5" font-weight="600">Requirements</text><line x1="101" y1="58" x2="113" y2="58" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lc-arrow)"/><rect x="114" y="30" width="94" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--line-strong)"/><text class="card-lab" x="161.0" y="22" text-anchor="middle" font-size="12">2</text><text class="lab" x="161.0" y="54" text-anchor="middle" font-size="12.5" font-weight="600">Conceptual</text><text class="labm" x="161.0" y="72" text-anchor="middle" font-size="11.5">design (ER)</text><line x1="209" y1="58" x2="221" y2="58" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lc-arrow)"/><rect x="222" y="30" width="94" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--line-strong)"/><text class="card-lab" x="269.0" y="22" text-anchor="middle" font-size="12">3</text><text class="lab" x="269.0" y="54" text-anchor="middle" font-size="12.5" font-weight="600">Logical</text><text class="labm" x="269.0" y="72" text-anchor="middle" font-size="11.5">design (mapping)</text><line x1="317" y1="58" x2="329" y2="58" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lc-arrow)"/><rect x="330" y="30" width="94" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--line-strong)"/><text class="card-lab" x="377.0" y="22" text-anchor="middle" font-size="12">4</text><text class="lab" x="377.0" y="62" text-anchor="middle" font-size="12.5" font-weight="600">Normalisation</text><line x1="425" y1="58" x2="437" y2="58" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lc-arrow)"/><rect x="438" y="30" width="94" height="56" rx="8" fill="var(--paper)" stroke="var(--line-strong)"/><text class="card-lab" x="485.0" y="22" text-anchor="middle" font-size="12">5</text><text class="lab" x="485.0" y="54" text-anchor="middle" font-size="12.5" font-weight="600">Physical</text><text class="labm" x="485.0" y="72" text-anchor="middle" font-size="11.5">design (types)</text><line x1="533" y1="58" x2="545" y2="58" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lc-arrow)"/><rect x="546" y="30" width="94" height="56" rx="8" fill="var(--paper)" stroke="var(--line-strong)"/><text class="card-lab" x="593.0" y="22" text-anchor="middle" font-size="12">6</text><text class="lab" x="593.0" y="54" text-anchor="middle" font-size="12.5" font-weight="600">Implementation</text><text class="labm" x="593.0" y="72" text-anchor="middle" font-size="11.5">(SQL)</text><line x1="641" y1="58" x2="653" y2="58" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#lc-arrow)"/><rect x="654" y="30" width="94" height="56" rx="8" fill="var(--paper)" stroke="var(--line-strong)"/><text class="card-lab" x="701.0" y="22" text-anchor="middle" font-size="12">7</text><text class="lab" x="701.0" y="62" text-anchor="middle" font-size="12.5" font-weight="600">Testing</text><path d="M701.0 86 V122 H54 V88" fill="none" stroke="var(--chal)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#lc-arrow)"/><text class="labm" x="380" y="140" text-anchor="middle">A failed test often reveals a missed business rule: back to step 1</text></svg><figcaption>The database development lifecycle. This topic walks steps 1 to 7 once, on one example.</figcaption></figure>
+  <div class="prose">
+    <p><b>Requirements</b> become short, testable <b>business rules</b> (Practical 0 scenario): each course has a unique code, name and level 4-8, and one coordinating lecturer; courses consist of modules and a module can be in several courses; each module is delivered by one lecturer, and a lecturer may deliver several or none; a student is on one course and registers for many modules, and we record the date and semester of each registration.</p>
+    <p>Read the rules for <b>nouns</b> (entities), <b>facts about nouns</b> (attributes), <b>verbs</b> (relationships), quantity words like "one", "many", "each" (<b>cardinality</b>), and "must", "may", "or none" (<b>participation</b>). RegistrationDate belongs to no entity: it describes the act of registering, so it is an attribute of the relationship.</p>
+    <p>Read every relationship in both directions and say both sentences: "One lecturer delivers many modules. Each module is delivered by one lecturer." If both directions say "many", it is M:N. Cardinality answers <i>how many?</i>; participation answers <i>is it compulsory?</i> Keep them as two questions.</p>
+  </div>
+  <figure class="figure er"><svg viewBox="0 0 760 276" role="img" aria-label="Chen notation key: twelve symbols"><g transform="translate(0,0)"><rect class="ent" x="35" y="18" width="120" height="40"/><text class="t" x="95" y="43" text-anchor="middle" font-size="13">STUDENT</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Entity (strong)</text></g><g transform="translate(190,0)"><rect class="ent" x="35" y="18" width="120" height="40"/><rect class="ent" x="40" y="23" width="110" height="30" fill="none"/><text class="t" x="95" y="43" text-anchor="middle" font-size="13">DEPENDENT</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Weak entity</text></g><g transform="translate(380,0)"><polygon class="rel" points="35,38 95,12 155,38 95,64"/><text class="t" x="95" y="42" text-anchor="middle" font-size="12">TEACHES</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Relationship</text></g><g transform="translate(570,0)"><polygon class="rel" points="35,38 95,12 155,38 95,64"/><polygon class="rel" fill="none" points="46,38 95,17 144,38 95,59"/><text class="t" x="95" y="42" text-anchor="middle" font-size="11">HAS</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Identifying relationship</text></g><g transform="translate(0,92)"><ellipse class="att" cx="95" cy="38" rx="55" ry="18"/><text class="tm" x="95" y="43" text-anchor="middle">Surname</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Attribute</text></g><g transform="translate(190,92)"><ellipse class="att" cx="95" cy="38" rx="55" ry="18"/><text class="tk" x="95" y="43" text-anchor="middle">StudentID</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Key attribute (underlined)</text></g><g transform="translate(380,92)"><ellipse class="att" cx="95" cy="38" rx="62" ry="18"/><text class="tm" x="95" y="43" text-anchor="middle">DependentName</text><line x1="50" x2="140" y1="48" y2="48" stroke="var(--ink)" stroke-dasharray="4 3"/><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Partial key (dashed)</text></g><g transform="translate(570,92)"><ellipse class="att" cx="95" cy="38" rx="55" ry="18"/><ellipse class="att" cx="95" cy="38" rx="49" ry="13" fill="none"/><text class="tm" x="95" y="43" text-anchor="middle">Phone</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Multivalued attribute</text></g><g transform="translate(0,184)"><ellipse class="att" cx="95" cy="38" rx="55" ry="18" stroke-dasharray="5 4"/><text class="tm" x="95" y="43" text-anchor="middle">Age</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Derived attribute</text></g><g transform="translate(190,184)"><ellipse class="att" cx="95" cy="22" rx="40" ry="14"/><text class="tm" x="95" y="26" text-anchor="middle">Name</text><line class="edge" x1="80" y1="36" x2="55" y2="48" stroke-width="1"/><line class="edge" x1="110" y1="36" x2="135" y2="48" stroke-width="1"/><ellipse class="att" cx="55" cy="58" rx="40" ry="12"/><text class="tm" x="55" y="62" text-anchor="middle" font-size="11">Forename</text><ellipse class="att" cx="135" cy="58" rx="40" ry="12"/><text class="tm" x="135" y="62" text-anchor="middle" font-size="11">Surname</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Composite attribute</text></g><g transform="translate(380,184)"><line class="edge" x1="35" y1="35" x2="155" y2="35"/><line class="edge" x1="35" y1="41" x2="155" y2="41"/><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Total participation: must</text></g><g transform="translate(570,184)"><line class="edge" x1="35" y1="38" x2="155" y2="38"/><text class="card-lab" x="45" y="30">1</text><text class="card-lab" x="145" y="30">N</text><text class="tm" x="95" y="80" text-anchor="middle" font-size="12.5">Partial participation: may</text></g></svg><figcaption>Chen notation: the twelve symbols used in this module.</figcaption></figure>
+  <figure class="figure er"><svg viewBox="0 0 760 476" role="img" aria-labelledby="erUniT erUniD"><title id="erUniT">University ER diagram in Chen notation</title><desc id="erUniD">Lecturer coordinates Course (1 to N, every course must have one); Lecturer delivers Module (1 to N, every module must have one); Course consists of Module (M to N); Course enrols Student (1 to N, every student must be on a course); Student registers for Module (M to N) with RegistrationDate and Semester.</desc><line class="edge" x1="305" y1="55" x2="215" y2="120"/><line class="edge" x1="213.1" y1="117.7" x2="138.1" y2="177.7"/><line class="edge" x1="216.9" y1="122.3" x2="141.9" y2="182.3"/><line class="edge" x1="455" y1="55" x2="545" y2="120"/><line class="edge" x1="543.1" y1="122.3" x2="618.1" y2="182.3"/><line class="edge" x1="546.9" y1="117.7" x2="621.9" y2="177.7"/><line class="edge" x1="195.0" y1="208.0" x2="380.0" y2="208.0"/><line class="edge" x1="195.0" y1="202.0" x2="380.0" y2="202.0"/><line class="edge" x1="380" y1="205" x2="565" y2="205"/><line class="edge" x1="120" y1="230" x2="205" y2="300"/><line class="edge" x1="203.5" y1="302.6" x2="303.5" y2="362.6"/><line class="edge" x1="206.5" y1="297.4" x2="306.5" y2="357.4"/><line class="edge" x1="455" y1="360" x2="560" y2="300"/><line class="edge" x1="560" y1="300" x2="640" y2="230"/><polygon class="rel" points="143,120 215,90 287,120 215,150"/><text class="t" x="215" y="125" text-anchor="middle" font-size="12" font-weight="700">COORDINATES</text><polygon class="rel" points="473,120 545,90 617,120 545,150"/><text class="t" x="545" y="125" text-anchor="middle" font-size="12" font-weight="700">DELIVERS</text><polygon class="rel" points="308,205 380,175 452,205 380,235"/><text class="t" x="380" y="210" text-anchor="middle" font-size="12" font-weight="700">CONSISTS_OF</text><polygon class="rel" points="133,300 205,270 277,300 205,330"/><text class="t" x="205" y="305" text-anchor="middle" font-size="12" font-weight="700">ENROLLED_ON</text><polygon class="rel" points="488,300 560,270 632,300 560,330"/><text class="t" x="560" y="305" text-anchor="middle" font-size="12" font-weight="700">REGISTERS</text><text class="card-lab" x="290" y="62" text-anchor="middle">1</text><text class="card-lab" x="148" y="162" text-anchor="middle">N</text><text class="card-lab" x="470" y="62" text-anchor="middle">1</text><text class="card-lab" x="612" y="162" text-anchor="middle">N</text><text class="card-lab" x="214" y="196" text-anchor="middle">M</text><text class="card-lab" x="548" y="196" text-anchor="middle">N</text><text class="card-lab" x="106" y="250" text-anchor="middle">1</text><text class="card-lab" x="292" y="345" text-anchor="middle">N</text><text class="card-lab" x="468" y="345" text-anchor="middle">M</text><text class="card-lab" x="656" y="250" text-anchor="middle">N</text><line class="edge" x1="540" y1="412" x2="560" y2="330" stroke-width="1"/><ellipse class="att" cx="540" cy="428" rx="81.2" ry="16"/><text class="tm" x="540" y="432" text-anchor="middle">RegistrationDate</text><line class="edge" x1="700" y1="382" x2="560" y2="330" stroke-width="1"/><ellipse class="att" cx="700" cy="398" rx="47.6" ry="16"/><text class="tm" x="700" y="402" text-anchor="middle">Semester</text><rect class="ent" x="305.0" y="20.0" width="150" height="50" rx="2"/><text class="t" x="380" y="42" text-anchor="middle" font-weight="700">LECTURER</text><text class="tk" x="380" y="60" text-anchor="middle" font-size="12">LecturerID</text><rect class="ent" x="45.0" y="180.0" width="150" height="50" rx="2"/><text class="t" x="120" y="202" text-anchor="middle" font-weight="700">COURSE</text><text class="tk" x="120" y="220" text-anchor="middle" font-size="12">CourseCode</text><rect class="ent" x="565.0" y="180.0" width="150" height="50" rx="2"/><text class="t" x="640" y="202" text-anchor="middle" font-weight="700">MODULE</text><text class="tk" x="640" y="220" text-anchor="middle" font-size="12">ModuleCode</text><rect class="ent" x="305.0" y="340.0" width="150" height="50" rx="2"/><text class="t" x="380" y="362" text-anchor="middle" font-weight="700">STUDENT</text><text class="tk" x="380" y="380" text-anchor="middle" font-size="12">StudentID</text><text class="tm" x="752" y="468" text-anchor="end" font-size="12">double line = must take part (total) · single line = may (partial)</text></svg><figcaption>The university ER diagram (keys only, for clarity). Two relationships are M:N; three are 1:N. A module may have no students yet (COM750), and a lecturer may deliver no module (Dr Harris).</figcaption></figure>
+  <p class="note">A <b>weak entity</b> cannot be identified by its own attributes. A dependent called Sara is not unique across a company; "employee 7's dependent Sara" is. University version: "assessment 1 of COM745". Try the weak-entity scenario in the builder below.</p>
+</section>
+
+<section id="a-mapping" data-nav="ER to tables">
+  <div class="sec-head"><span class="sec-num">A8</span><h3>From ER diagram to tables</h3></div>
+  <div class="prose">
+    <p>Mapping turns the picture into tables with a small set of mechanical rules. Two rules carry most of the weight: a <b>1:N</b> relationship puts the foreign key on the N side (a module row has room for exactly one LecturerID; a list of modules on the lecturer side would break 1NF), and an <b>M:N</b> relationship becomes a new table whose primary key is both foreign keys. For 1:1, put the FK on the side with total participation and add UNIQUE.</p>
+  </div>
+  <figure class="figure explorer" data-explorer="er">
+    <div class="title"><span class="tagx">Explorer</span><h3>ER builder and mapper</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Choose a scenario, change the cardinality and participation, and add a multivalued or derived attribute. The diagram, the mapped tables, the rules used and the MySQL DDL all update.</p>
+    <div class="body"></div>
+  </figure>
+  <div class="code" data-lang="schema"><pre>Lecturer     (LecturerID PK, Forename, MiddleName, Surname, DateOfBirth, Email UNIQUE, RankLevel)
+Course       (CourseCode PK, CourseName, AccreditationLevel, CoordinatorID FK → Lecturer)
+Module       (ModuleCode PK, ModuleName, Credits, LecturerID FK → Lecturer)
+CourseModule (CourseCode PK/FK → Course, ModuleCode PK/FK → Module)
+Student      (StudentID PK, Forename, MiddleName, Surname, DateOfBirth, Email UNIQUE,
+              Mobile, EnrolmentLevel, CourseCode FK → Course, Status DEFAULT 'Active')
+Registration (StudentID PK/FK → Student, ModuleCode PK/FK → Module, RegistrationDate, Semester)</pre></div>
+  <p class="note">The full university schema, mapped from the ER diagram above. This is the <a href="../labs.html#university">shared dataset</a> used in every demo, explorer and the playground. The Lectures 1-2 notes call the lecturer entity <i>Tutor</i>; the practicals and this site say <i>Lecturer</i>.</p>
+</section>
+
+<section id="a-normal" data-nav="Normalisation">
+  <div class="sec-head"><span class="sec-num">A9</span><h3>Normalisation: each fact in one place</h3></div>
+  <div class="prose">
+    <p>Normalisation checks that every fact is stored exactly once, so the database cannot contradict itself. The tool behind it is the <b>functional dependency</b>: A → B means that knowing A tells you exactly one B (StudentID → StudentName). Test: "if I know the left side, is there only one possible right side?" StudentName → StudentID fails, because two students can share a name.</p>
+    <p>In a registrations spreadsheet keyed by (StudentID, ModuleCode): StudentName depends on <i>part</i> of the key (a <b>partial</b> dependency); LecturerName depends on LecturerID, which depends on ModuleCode (a <b>transitive</b> dependency). Only RegistrationDate needs the whole key.</p>
+    <ul class="list">
+      <li><b>1NF</b>: one atomic value per cell, every row identifiable.</li>
+      <li><b>2NF</b>: 1NF, and no partial dependencies. A table with a single-column key is automatically in 2NF.</li>
+      <li><b>3NF</b>: 2NF, and no transitive dependencies. Every non-key attribute depends on the key, the whole key, and nothing but the key (Kent).</li>
+    </ul>
+  </div>
+  <figure class="figure explorer" data-explorer="normaliser">
+    <div class="title"><span class="tagx">Explorer</span><h3>Normaliser and anomaly lab</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Step through UNF to 3NF. Then apply the same three changes to the wide table and to the 3NF design, and compare. <a href="../demo.html#mysql-02-normalise">Demo 2</a> does the same on real MySQL.</p>
+    <div class="body"></div>
+  </figure>
+  <p class="callout good">Two routes, one answer: the 3NF tables match what the ER mapping produced. A well-drawn ER diagram usually lands in 3NF already; normalisation is the check, and the tool for fixing spreadsheets and legacy tables that were never designed.</p>
+</section>
+
+<section id="a-sql" data-nav="SQL: DDL, DML, types">
+  <div class="sec-head"><span class="sec-num">A10</span><h3>SQL: two vocabularies and the right data types</h3></div>
+  <div class="tbl"><table><thead><tr><th>Group</th><th>Purpose</th><th>Commands</th></tr></thead><tbody>
+    <tr><td>DDL: Data Definition Language</td><td>Define and change structure</td><td class="m">CREATE, ALTER, DROP</td></tr>
+    <tr><td>DML: Data Manipulation Language</td><td>Change the rows</td><td class="m">INSERT, UPDATE, DELETE</td></tr>
+    <tr><td>DQL: Data Query Language</td><td>Read, change nothing</td><td class="m">SELECT</td></tr>
+  </tbody></table></div>
+  <p class="note">Many textbooks fold SELECT into DML. GRANT/REVOKE (DCL) and COMMIT/ROLLBACK (TCL) complete the set.</p>
+  <div class="tbl"><table><thead><tr><th>Type</th><th>Stores</th><th>University example</th></tr></thead><tbody>
+    <tr><td class="m">INT / TINYINT</td><td>Whole numbers (TINYINT: −128 to 127)</td><td class="m">StudentID INT, Credits TINYINT</td></tr>
+    <tr><td class="m">DECIMAL(8,2)</td><td>Exact decimals: use for money, never FLOAT</td><td class="m">Fee 9250.00</td></tr>
+    <tr><td class="m">VARCHAR(n)</td><td>Text up to n characters</td><td class="m">Email VARCHAR(100)</td></tr>
+    <tr><td class="m">CHAR(n)</td><td>Fixed-length text</td><td class="m">Country CHAR(2)</td></tr>
+    <tr><td class="m">DATE / DATETIME</td><td>Date; date and time</td><td class="m">DateOfBirth DATE</td></tr>
+    <tr><td class="m">BOOLEAN</td><td>True/false (MySQL stores TINYINT(1))</td><td class="m">IsInternational</td></tr>
+  </tbody></table></div>
+  <p class="callout">Is a phone number an INT? No. <code>02081234567</code> loses its leading zero, <code>+44</code> and spaces cannot be stored, and nobody adds two phone numbers. If you would never do arithmetic on it, it is probably not a number: phone numbers, postcodes and module codes like COM745 are VARCHAR.</p>
+</section>
+
+<section id="a-perf" data-nav="Indexes and transactions">
+  <div class="sec-head"><span class="sec-num">A11</span><h3>Indexes and transactions</h3></div>
+  <div class="prose">
+    <p>An <b>index</b> is the phone book's alphabetical order rebuilt inside the database: <code>CREATE INDEX idx_student_surname ON Student (Surname);</code> lets MySQL jump to "Khan" instead of reading every row. MySQL indexes every primary key and UNIQUE column automatically, and InnoDB indexes each foreign key. Indexes speed up reads but cost storage and slow every write, so index the columns people search and join on.</p>
+    <p>A <b>transaction</b> groups statements into one unit that happens completely or not at all. A bank transfer is two UPDATEs; enrolling a student is a Student row plus Registration rows. Relational databases guarantee <b>ACID</b>:</p>
+  </div>
+  <div class="grid2">
+    <div class="card"><span class="k">Atomicity</span><p>All or nothing. A half-finished transfer is rolled back.</p></div>
+    <div class="card"><span class="k">Consistency</span><p>Each transaction moves the database from one valid state to another; constraints still hold.</p></div>
+    <div class="card"><span class="k">Isolation</span><p>Concurrent transactions don't see each other's half-done work.</p></div>
+    <div class="card"><span class="k">Durability</span><p>Once committed, a change survives a crash or power cut.</p></div>
+  </div>
+  <p class="note">Many NoSQL systems relax some of these guarantees in exchange for scale and speed. That trade-off returns in Week 2 and again with Hadoop.</p>
+</section>
+
+<!-- ============================== B ============================== -->
+<div class="part" id="demo" data-nav="B · Watch the demo"><span class="letter">B</span><h2>Watch the demonstration</h2><p>Six lecturer demonstrations that build, fill, query and test the database.</p></div>
+
+<section id="b-demos" data-nav="Demonstration library">
+  <div class="prose">
+    <p>Each demonstration opens in <b>presenter mode</b>: one step at a time, with the code, the result and the explanation revealed when you choose. Every result was captured by running the SQL on <b>MySQL 8.0.46</b>. Follow along in Workbench with the two data scripts, then try the practice task at the end of each demo.</p>
+  </div>
+  <div class="demos" data-demolist="relational"></div>
+  <div class="callout"><b>Follow along on your own machine.</b> Open <a href="../data/university/university_schema.sql">university_schema.sql</a> and then <a href="../data/university/university_seed.sql">university_seed.sql</a> in MySQL Workbench (File > Open SQL Script, then the lightning bolt). Demos 4-6 start from this fresh data; re-run both scripts to reset. Demo 3 builds the same database step by step instead.</div>
+</section>
+
+<!-- ============================== C ============================== -->
+<div class="part" id="explore" data-nav="C · Explore"><span class="letter">C</span><h2>Explore interactively</h2><p>Change things, run them, and watch what happens and why.</p></div>
+
+<section id="c-playground" data-nav="SQL playground">
+  <div class="sec-head"><span class="sec-num">C1</span><h3>SQL playground on the university database</h3></div>
+  <figure class="figure explorer" data-explorer="playground">
+    <div class="title"><span class="tagx">Playground</span><h3>Run SQL in your browser</h3><span class="badge b-real">Real SQLite engine</span></div>
+    <p class="caption">The full university dataset, loaded into SQLite running in this page. Constraints are enforced, and common errors are shown with the MySQL error number you would see in Workbench. A few things differ from MySQL: see below.</p>
+    <div class="body"></div>
+  </figure>
+  <details><summary>How the playground differs from MySQL</summary>
+    <ul class="list">
+      <li>The engine is SQLite. <code>SHOW TABLES</code>, <code>DESCRIBE</code>, <code>SHOW INDEX</code>, <code>USE</code> and <code>START TRANSACTION</code> are translated for you.</li>
+      <li>SQLite does not enforce MySQL's <code>ONLY_FULL_GROUP_BY</code>, so a query that MySQL rejects with ERROR 1055 can still run here. When that happens the playground adds a note saying MySQL would refuse it; Demo 5 shows the real error.</li>
+      <li><code>EXPLAIN</code> shows SQLite's plan in words (SCAN vs SEARCH USING INDEX) rather than MySQL's table.</li>
+      <li>Error messages are mapped to the MySQL code and wording; MySQL's own text names the constraint in more detail.</li>
+      <li>Results for the module's practice queries were cross-checked: the same queries return identical rows on SQLite and on MySQL 8.0.46.</li>
+    </ul>
+  </details>
+</section>
+
+<section id="c-join" data-nav="JOIN visualiser">
+  <div class="sec-head"><span class="sec-num">C2</span><h3>What INNER, LEFT and RIGHT JOIN keep</h3></div>
+  <figure class="figure explorer" data-explorer="join">
+    <div class="title"><span class="tagx">Explorer</span><h3>JOIN visualiser</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Switch join type. Hover or tab onto a result row to light up the rows it came from. John (1003) and COM750 have no registrations.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="c-index" data-nav="Index explorer">
+  <div class="sec-head"><span class="sec-num">C3</span><h3>What an index saves, and what it costs</h3></div>
+  <figure class="figure explorer" data-explorer="index">
+    <div class="title"><span class="tagx">Explorer</span><h3>Full scan or index seek?</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Grow the table from 100 rows to 10 million and switch the index on. The numbers come from a simple model, stated under the chart.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="c-txn" data-nav="Transaction explorer">
+  <div class="sec-head"><span class="sec-num">C4</span><h3>A transfer, a transaction and a power cut</h3></div>
+  <figure class="figure explorer" data-explorer="txn">
+    <div class="title"><span class="tagx">Explorer</span><h3>ACID in action</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">Try the transfer three ways: without a transaction, with one and COMMIT, and with one interrupted by a power cut. Watch the total.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<!-- ============================== D ============================== -->
+<div class="part" id="practise" data-nav="D · Practise"><span class="letter">D</span><h2>Practise</h2><p>Short exercises for class, each linked to a demonstration. Try them in the playground first.</p></div>
+
+<section id="d-tasks" data-nav="Practice exercises">
+  <div class="tier t-core"><div class="tier-head"><span class="tag">Core</span><span class="note">Read and filter (Demo 4)</span></div><ol class="tasks">
+<li class="task" id="d1"><div class="task-q"><span class="num">D1</span><span>List the MSc Data Science students (course code MSCDS) by surname, showing ID, forename and surname.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT StudentID, Forename, Surname
+FROM Student
+WHERE CourseCode = &#x27;MSCDS&#x27;
+ORDER BY Surname;</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>+-----------+----------+----------+
+| StudentID | Forename | Surname  |
++-----------+----------+----------+
+|      1018 | Emma     | Brown    |
+|      1015 | Omar     | Farouk   |
+|      1017 | Kwame    | Mensah   |
+|      1016 | Sofia    | Rossi    |
+|      1019 | Arjun    | Singh    |
+|      1014 | Grace    | Thompson |
+|      1013 | Wei      | Zhang    |
++-----------+----------+----------+
+7 rows in set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div></details></li>
+<li class="task" id="d2"><div class="task-q"><span class="num">D2</span><span>How many students are on each course? Show the course code and the count.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT CourseCode, COUNT(*) AS Students
+FROM Student
+GROUP BY CourseCode
+ORDER BY CourseCode;</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>+------------+----------+
+| CourseCode | Students |
++------------+----------+
+| BSCCS      |        5 |
+| MSCCST     |       12 |
+| MSCDS      |        7 |
++------------+----------+
+3 rows in set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div></details></li>
+<li class="task" id="d3"><div class="task-q"><span class="num">D3</span><span>Which students have no mobile number recorded? Remember how NULL behaves.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT StudentID, Forename, Surname
+FROM Student
+WHERE Mobile IS NULL
+ORDER BY StudentID
+LIMIT 5;</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>+-----------+----------+---------+
+| StudentID | Forename | Surname |
++-----------+----------+---------+
+|      1001 | Ahmed    | Ali     |
+|      1003 | John     | Smith   |
+|      1005 | Daniel   | Murphy  |
+|      1007 | Oliver   | Bennett |
+|      1009 | Lucas    | Silva   |
++-----------+----------+---------+
+5 rows in set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div><p class="note" style="white-space:pre-wrap">Showing the first 5 of 12. WHERE Mobile = NULL would return nothing.</p></details></li>
+</ol></div>
+<div class="tier t-chal"><div class="tier-head"><span class="tag">Challenge</span><span class="note">Join and group (Demo 5)</span></div><ol class="tasks">
+<li class="task" id="d4"><div class="task-q"><span class="num">D4</span><span>Show every module with its lecturer&#x27;s full name.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT m.ModuleCode, m.ModuleName,
+       CONCAT(l.Forename, &#x27; &#x27;, l.Surname) AS Lecturer
+FROM Module m
+JOIN Lecturer l ON l.LecturerID = m.LecturerID
+ORDER BY m.ModuleCode;</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>+------------+-----------------------------------+---------------+
+| ModuleCode | ModuleName                        | Lecturer      |
++------------+-----------------------------------+---------------+
+| COM745     | Big Data and Infrastructure       | Emily Brown   |
+| COM746     | Database Systems                  | Imran Khan    |
+| COM747     | Data Science and Machine Learning | Mei Chen      |
+| COM748     | Cloud Computing                   | Daniel Okafor |
+| COM750     | Artificial Intelligence           | Laura Wilson  |
+| COM760     | Masters Project                   | Laura Wilson  |
++------------+-----------------------------------+---------------+
+6 rows in set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div></details></li>
+<li class="task" id="d5"><div class="task-q"><span class="num">D5</span><span>Which modules have fewer than 5 students? Include modules with none.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT m.ModuleCode, COUNT(r.StudentID) AS Students
+FROM Module m
+LEFT JOIN Registration r ON r.ModuleCode = m.ModuleCode
+GROUP BY m.ModuleCode
+HAVING COUNT(r.StudentID) &lt; 5
+ORDER BY Students, m.ModuleCode;</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>+------------+----------+
+| ModuleCode | Students |
++------------+----------+
+| COM750     |        0 |
+| COM748     |        4 |
+| COM760     |        4 |
++------------+----------+
+3 rows in set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div><p class="note" style="white-space:pre-wrap">An INNER JOIN would silently drop COM750.</p></details></li>
+<li class="task" id="d6"><div class="task-q"><span class="num">D6</span><span>Which courses include COM745? Show the course names.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT c.CourseCode, c.CourseName
+FROM CourseModule cm
+JOIN Course c ON c.CourseCode = cm.CourseCode
+WHERE cm.ModuleCode = &#x27;COM745&#x27;
+ORDER BY c.CourseCode;</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>+------------+-------------------------------------+
+| CourseCode | CourseName                          |
++------------+-------------------------------------+
+| MSCCST     | MSc Computer Science and Technology |
+| MSCDS      | MSc Data Science                    |
++------------+-------------------------------------+
+2 rows in set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div></details></li>
+</ol></div>
+<div class="tier t-str"><div class="tier-head"><span class="tag">Stretch</span><span class="note">Think in sets</span></div><ol class="tasks">
+<li class="task" id="d7"><div class="task-q"><span class="num">D7</span><span>Is any student registered on a module that is not part of their own course? Write a query that would list them.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="sql"><pre>SELECT s.StudentID, s.CourseCode, r.ModuleCode
+FROM Registration r
+JOIN Student s ON s.StudentID = r.StudentID
+WHERE NOT EXISTS (
+  SELECT 1 FROM CourseModule cm
+  WHERE cm.CourseCode = s.CourseCode
+    AND cm.ModuleCode = r.ModuleCode);</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on MySQL 8.0.46</span></div><pre>Empty set</pre></div><div class="controls"><button type="button" class="btn" data-try>Try it in the playground</button></div><p class="note" style="white-space:pre-wrap">Empty set: every registration obeys the rule today. Nothing in the schema enforces it, though. Discuss: how could the design guarantee it?</p></details></li>
+<li class="task" id="d8"><div class="task-q"><span class="num">D8</span><span>Normalise to 3NF: Marks(StudentID, StudentName, ModuleCode, ModuleName, AssessmentNo, Mark, MarkerID, MarkerName), key (StudentID, ModuleCode, AssessmentNo).</span></div><details><summary>Check your answer</summary><pre class="console">StudentID → StudentName; ModuleCode → ModuleName (partial: 2NF moves them out).
+MarkerID → MarkerName (transitive: 3NF moves it out).
+
+Student    (StudentID PK, StudentName)
+Module     (ModuleCode PK, ModuleName)
+Marker     (MarkerID PK, MarkerName)
+Assessment (ModuleCode PK/FK, AssessmentNo PK)          -- assessment 1 of COM745: a weak entity
+Mark       (StudentID PK/FK, ModuleCode PK/FK, AssessmentNo PK/FK, Mark, MarkerID FK)
+
+If each assessment always has the same marker, MarkerID belongs in Assessment instead: ask what the rule is.</pre></details></li>
+</ol></div>
+</section>
+
+<!-- ============================== E ============================== -->
+<div class="part" id="independent" data-nav="E · Practicals"><span class="letter">E</span><h2>Complete independently</h2><p>The official Practicals 0 and 1, with their original task numbers, plus setup and troubleshooting.</p></div>
+
+<section id="e-setup" data-nav="Setting up MySQL">
+  <div class="sec-head"><span class="sec-num">E1</span><h3>Setting up MySQL and Workbench</h3></div>
+  <ol class="list prose">
+    <li><b>Lab PCs</b> have MySQL Server and MySQL Workbench installed. The root password is on Blackboard.</li>
+    <li><b>Your own laptop</b>: install MySQL Community Server 8.0 or 8.4 and MySQL Workbench from <a href="https://dev.mysql.com/downloads/">dev.mysql.com/downloads</a> (Windows: MySQL Installer; macOS: the DMG packages). Write down the root password you choose.</li>
+    <li>In Workbench, click <b>+</b> next to MySQL Connections: host <code>127.0.0.1</code>, port <code>3306</code>, user <code>root</code>. Use <b>Test Connection</b>, then <b>Store in Vault</b> for the password.</li>
+    <li>Open <a href="../data/university/university_schema.sql">university_schema.sql</a> and run it, then <a href="../data/university/university_seed.sql">university_seed.sql</a>. Refresh the Schemas panel: <code>university_db</code> appears with six tables.</li>
+  </ol>
+  <p class="note">The CHECK constraints need MySQL 8.0.16 or later. On an older server they are accepted but not enforced.</p>
+</section>
+
+<section id="e-p0" data-nav="Practical 0">
+  <div class="sec-head"><span class="sec-num">E2</span><h3>Practical 0: Data modelling</h3></div>
+  <div class="card"><span class="k">Scenario</span><p>A university wishes to store information about students, modules, courses and lecturers. Courses have a unique course code, course name and an accreditation level, which is an enumeration between 4 and 8. Each course has a coordinator, which is a lecturer. Courses consist of modules; the number of modules varies depending on the number of credit points that can be earned in each module. Modules have a name, unique module code and are delivered by a nominated lecturer. Lecturers have unique employee numbers, forenames, middle names and surnames, a date of birth, an email address and a rank of seniority. The rank of seniority is an enumeration between 1 and 40. Students have unique student numbers, forenames, middle names and surnames, a date of birth, an email address and a current enrolment level, an enumeration between 1 and 20.</p></div>
+<ol class="tasks">
+<li class="task" data-key="P0-T0"><div class="task-q"><span class="num">T0</span><span>Produce a list of all attributes that need to be stored. Note the MySQL data type that each attribute will be. <a href="https://dev.mysql.com/doc/refman/8.0/en/data-types.html">MySQL 8.0 data types</a></span></div><details><summary>Hint</summary><p>Go entity by entity. Ask of each attribute: will I ever do arithmetic on it? Codes and phone numbers are text. Enumerations 1-40 fit in TINYINT.</p></details></li>
+<li class="task" data-key="P0-T1"><div class="task-q"><span class="num">T1</span><span>Normalise (3NF) the attributes into a number of tables.</span></div><details><summary>Hint</summary><p>Start with one table per entity. Then look at the two &quot;many-to-many&quot; sentences in the scenario: courses consist of modules, and (from Practical 1) students study modules.</p></details></li>
+<li class="task" data-key="P0-T2"><div class="task-q"><span class="num">T2</span><span>Explain the rationale for the normalisation strategy you produced.</span></div><details><summary>Hint</summary><p>Name each dependency you removed: partial (2NF) or transitive (3NF). Explain why each foreign key sits where it does.</p></details></li>
+<li class="task" data-key="P0-T3"><div class="task-q"><span class="num">T3</span><span>Produce an Entity-Relationship model for this database (Chen notation as taught). You may use MySQL Workbench, draw.io, Lucidchart or pen and paper.</span></div><details><summary>Hint</summary><p>Mark cardinality (1:N, M:N) and participation (double line = must) on every relationship. Use the ER builder explorer on this page to check your mapping.</p></details></li>
+<li class="task" data-key="P0-T4"><div class="task-q"><span class="num">T4</span><span>Read the MySQL manual and examine the differences between the types of join statements it supports. <a href="https://dev.mysql.com/doc/refman/8.0/en/join.html">MySQL 8.0 JOIN clause</a></span></div><details><summary>Hint</summary><p>Try INNER, LEFT and RIGHT JOIN in the JOIN visualiser on this page. Note that MySQL has no FULL OUTER JOIN; it can be emulated with UNION.</p></details></li>
+</ol>
+</section>
+
+<section id="e-p1" data-nav="Practical 1">
+  <div class="sec-head"><span class="sec-num">E3</span><h3>Practical 1: MySQL Workbench</h3></div>
+  <ol class="tasks">
+<li class="task" data-key="P1-T0"><div class="task-q"><span class="num">T0</span><span>Open MySQL Workbench and create a stored connection to the database. Store the password in the vault. On your own machine, this is the root password you created during setup.</span></div><details><summary>Hint</summary><p>Home screen &gt; the + next to MySQL Connections. Host 127.0.0.1, port 3306, user root. &quot;Test Connection&quot; before saving.</p></details></li>
+<li class="task" data-key="P1-T1"><div class="task-q"><span class="num">T1</span><span>Spend 5-10 minutes exploring MySQL Workbench. Locate the query interface, import/export options, the schema creation interface and the UI for table creation.</span></div><details><summary>Hint</summary><p>Navigator panel (left): Schemas tab. Server menu: Data Import/Export. Right-click Tables &gt; Create Table.</p></details></li>
+<li class="task" data-key="P1-T2"><div class="task-q"><span class="num">T2</span><span>Use Workbench to create the schema and tables you modelled in Practical 0. Workbench shows the SQL it generates; record these statements and study what they mean.</span></div><details><summary>Hint</summary><p>Create parent tables first (Lecturer, Course, Module), then the tables holding foreign keys. Compare the generated SQL with Demo 3.</p></details></li>
+<li class="task" data-key="P1-T3"><div class="task-q"><span class="num">T3</span><span>Insert at least 20 instances of sample data across the tables you created: at least one course, two modules, a lecturer per module and 4-7 students per module.</span></div><details><summary>Hint</summary><p>Insert parents before children or you will meet ERROR 1452. One INSERT can add many rows: VALUES (...), (...), (...);</p></details></li>
+<li class="task" data-key="P1-T4"><div class="task-q"><span class="num">T4</span><span>Write SELECT commands to display data stored in the database. Explore ORDER BY and GROUP BY.</span></div><details><summary>Hint</summary><p>Every column in the SELECT list must be grouped or aggregated (ERROR 1055 otherwise).</p></details></li>
+<li class="task" data-key="P1-T5"><div class="task-q"><span class="num">T5</span><span>Create a SELECT query that lists the students studying a particular module, given by a module code in the WHERE clause. Use a JOIN or similar.</span></div><details><summary>Hint</summary><p>The student names are in one table and the module codes in another. Which table links them?</p></details></li>
+<li class="task" data-key="P1-T6"><div class="task-q"><span class="num">T6</span><span>Create a SELECT query giving module information: Module Code, Module Name, Lecturer and Student count. Build on T5.</span></div><details><summary>Hint</summary><p>Add the Lecturer table to your T5 join, then GROUP BY the module. Count a column, not *, if you want 0 for modules with no students.</p></details></li>
+<li class="task" data-key="P1-T7"><div class="task-q"><span class="num">T7</span><span>Create a SELECT query that lists students across all modules.</span></div><details><summary>Hint</summary><p>Your T5 query without the WHERE, ordered so each module&#x27;s students sit together.</p></details></li>
+<li class="task" data-key="P1-T8"><div class="task-q"><span class="num">T8</span><span>Create a SELECT query giving the total count of students across all modules.</span></div><details><summary>Hint</summary><p>Decide what you are counting: registrations, or different people? COUNT(DISTINCT ...) may help.</p></details></li>
+<li class="task" data-key="P1-T9"><div class="task-q"><span class="num">T9</span><span>Write an UPDATE query that updates the name of each module independently, where the module code is given in the WHERE clause.</span></div><details><summary>Hint</summary><p>One UPDATE per module. Preview each WHERE with a SELECT first.</p></details></li>
+<li class="task" data-key="P1-T10"><div class="task-q"><span class="num">T10</span><span>Create a DELETE query that deletes all students from a specified module, where the module code is given in the WHERE clause.</span></div><details><summary>Hint</summary><p>Which table records that a student is on a module? Deleting from Student would remove the person from every module, and MySQL may refuse (ERROR 1451).</p></details></li>
+</ol>
+  <p class="note" data-progress></p>
+</section>
+
+<section id="e-trouble" data-nav="Troubleshooting">
+  <div class="sec-head"><span class="sec-num">E4</span><h3>Troubleshooting: errors you will meet</h3></div>
+  <div class="tbl"><table><thead><tr><th>You see</th><th>When</th><th>What to do</th></tr></thead><tbody><tr><td class="m">Can&#x27;t connect to MySQL server on &#x27;127.0.0.1&#x27; (10061)</td><td>Connecting</td><td>The MySQL service is not running. Windows: Services &gt; MySQL80 &gt; Start. macOS: System Settings &gt; MySQL &gt; Start.</td></tr><tr><td class="m">ERROR 1045: Access denied for user &#x27;root&#x27;@&#x27;localhost&#x27;</td><td>Connecting</td><td>Wrong password. On lab PCs use the one on Blackboard; on your laptop, the one chosen during installation.</td></tr><tr><td class="m">ERROR 1046: No database selected</td><td>Any statement</td><td>Run USE university_db; or double-click the schema in Workbench so it is shown in bold.</td></tr><tr><td class="m">ERROR 1064: You have an error in your SQL syntax</td><td>Any statement</td><td>Look just before the quoted text: a missing comma, bracket or quote, a missing semicolon on the previous line, or a reserved word such as RANK used as a name.</td></tr><tr><td class="m">ERROR 1050: Table already exists</td><td>CREATE TABLE</td><td>Re-running a script. Use DROP TABLE IF EXISTS first (in a practice copy only) or CREATE TABLE IF NOT EXISTS.</td></tr><tr><td class="m">ERROR 1215 / 3780: Cannot add foreign key constraint</td><td>ALTER TABLE</td><td>The FK column and the referenced PK must have the same type (INT with INT, VARCHAR(10) with VARCHAR(10)), and the parent column must be a key.</td></tr><tr><td class="m">ERROR 1452: Cannot add or update a child row: a foreign key constraint fails</td><td>INSERT, UPDATE</td><td>The value you reference does not exist yet. Insert parents first (Lecturer, Course, Module, Student, then Registration) or check the value.</td></tr><tr><td class="m">ERROR 1451: Cannot delete or update a parent row</td><td>DELETE, UPDATE</td><td>Child rows still point at this row. Delete or reassign them first, or define ON DELETE behaviour deliberately.</td></tr><tr><td class="m">ERROR 1062: Duplicate entry</td><td>INSERT</td><td>A PRIMARY KEY or UNIQUE value already exists. SELECT it first; for Registration the pair (StudentID, ModuleCode) must be new.</td></tr><tr><td class="m">ERROR 1048: Column cannot be null</td><td>INSERT</td><td>A NOT NULL column was given NULL or left out with no DEFAULT.</td></tr><tr><td class="m">ERROR 3819: Check constraint is violated</td><td>INSERT, UPDATE</td><td>The value is outside the allowed range (credits must be &gt; 0; levels 4-8, 1-20; rank 1-40).</td></tr><tr><td class="m">ERROR 1406: Data too long for column</td><td>INSERT</td><td>Text longer than VARCHAR(n). Shorten it or widen the column with ALTER TABLE … MODIFY.</td></tr><tr><td class="m">ERROR 1292 / 1366: Incorrect date or integer value</td><td>INSERT</td><td>Dates are &#x27;YYYY-MM-DD&#x27; in quotes; numbers have no quotes or letters.</td></tr><tr><td class="m">ERROR 1175: You are using safe update mode</td><td>UPDATE, DELETE</td><td>Workbench blocks UPDATE/DELETE whose WHERE does not use a key. Use the key in the WHERE (best), or Edit &gt; Preferences &gt; SQL Editor &gt; untick Safe Updates and reconnect.</td></tr><tr><td class="m">ERROR 1055: … not in GROUP BY clause</td><td>SELECT … GROUP BY</td><td>Every selected column must be in GROUP BY or inside an aggregate (COUNT, MIN, MAX…).</td></tr><tr><td class="m">ERROR 1052: Column … is ambiguous</td><td>SELECT … JOIN</td><td>Two joined tables have that column. Prefix it with the table alias: s.StudentID.</td></tr><tr><td class="m">A JOIN returns far too many rows</td><td>SELECT … JOIN</td><td>A missing or wrong ON condition gives a cross product. Each ON should match a foreign key.</td></tr><tr><td class="m">Changes disappear after closing Workbench</td><td>Transactions</td><td>Auto-commit was turned off and nothing was committed. Run COMMIT; or switch auto-commit back on (toolbar icon).</td></tr></tbody></table></div>
+</section>
+
+<section id="e-more" data-nav="More examples">
+  <div class="sec-head"><span class="sec-num">E5</span><h3>More examples for home study</h3></div>
+  <div class="grid2">
+    <div class="card"><span class="k">Inline constraints</span><p>The same Module table with constraints written inside CREATE TABLE, the style used in many textbooks:</p>
+      <div class="code" data-lang="sql"><pre>CREATE TABLE Module (
+  ModuleCode VARCHAR(10)  PRIMARY KEY,
+  ModuleName VARCHAR(100) NOT NULL,
+  Credits    TINYINT      NOT NULL CHECK (Credits > 0),
+  LecturerID INT          NOT NULL,
+  FOREIGN KEY (LecturerID) REFERENCES Lecturer (LecturerID)
+);</pre></div></div>
+    <div class="card"><span class="k">ON DELETE CASCADE</span><p>Delete a student and their registrations go too. Convenient, but think first: is losing the history acceptable?</p>
+      <div class="code" data-lang="sql"><pre>ALTER TABLE Registration
+  DROP FOREIGN KEY fk_registration_student;
+ALTER TABLE Registration
+  ADD CONSTRAINT fk_registration_student
+  FOREIGN KEY (StudentID) REFERENCES Student (StudentID)
+  ON DELETE CASCADE;</pre></div></div>
+    <div class="card"><span class="k">INSERT … SELECT</span><p>Register every MSc Data Science student on COM750 in one statement:</p>
+      <div class="code" data-lang="sql"><pre>INSERT INTO Registration (StudentID, ModuleCode, RegistrationDate, Semester)
+SELECT StudentID, 'COM750', '2026-10-05', 'Semester 1'
+FROM Student
+WHERE CourseCode = 'MSCDS';</pre></div></div>
+    <div class="card"><span class="k">Reverse engineer</span><p>Workbench: Database > Reverse Engineer, choose <code>university_db</code>. Compare the EER diagram with the Chen diagram in A7. Workbench draws crow's-foot notation: the "crow's foot" marks the N side.</p></div>
+  </div>
+</section>
+
+<!-- ============================== F ============================== -->
+<div class="part" id="check" data-nav="F · Check"><span class="letter">F</span><h2>Check your understanding</h2><p>A quiz with feedback, questions to reflect on, and what this topic counts towards.</p></div>
+
+<section id="f-quiz" data-nav="Quiz">
+  <div class="sec-head"><span class="sec-num">F1</span><h3>Quiz</h3></div>
+  <div class="quiz" data-quiz="relational"></div>
+</section>
+
+<section id="f-reflect" data-nav="Reflect">
+  <div class="sec-head"><span class="sec-num">F2</span><h3>Reflect and discuss</h3></div>
+  <ul class="list prose">
+    <li>Your Practical 0 design and a classmate's differ. Whose is right? Which business rule would decide it?</li>
+    <li>A rule changes: "a module can be co-delivered by several lecturers". What changes in the ER diagram, the tables and the SQL?</li>
+    <li>When would you deliberately <i>not</i> normalise to 3NF? (Think about reporting tables that are read millions of times and rarely written.)</li>
+    <li>The university now logs every Wi-Fi connection on campus: thousands of rows per second, never updated. Is a relational table still the best home? (Week 3 answers this.)</li>
+  </ul>
+</section>
+
+<section id="f-mis" data-nav="Misconceptions">
+  <div class="sec-head"><span class="sec-num">F3</span><h3>Common misconceptions</h3></div>
+  <div class="tbl"><table><thead><tr><th>Students often say…</th><th>Correct it to…</th></tr></thead><tbody>
+    <tr><td>"A database and a DBMS are the same thing."</td><td>The database is the data; the DBMS is the software managing it.</td></tr>
+    <tr><td>"NULL means zero or an empty string."</td><td>NULL means missing, unknown or not applicable, and is tested with IS NULL.</td></tr>
+    <tr><td>"Every relationship becomes a table."</td><td>Only M:N relationships (and multivalued attributes) need a new table; 1:N becomes a foreign key.</td></tr>
+    <tr><td>"The foreign key goes on the 1 side."</td><td>It goes on the N side, which has one value per row.</td></tr>
+    <tr><td>"A composite key is two primary keys."</td><td>It is one primary key made of two columns.</td></tr>
+    <tr><td>"Cardinality and participation are the same."</td><td>Cardinality is how many; participation is whether it is compulsory.</td></tr>
+    <tr><td>"Normalisation means splitting tables as much as possible."</td><td>Split only to remove a named dependency; over-splitting adds needless JOINs.</td></tr>
+    <tr><td>"A phone number should be an INT."</td><td>It is an identifier: leading zeros and +44 matter. Use VARCHAR.</td></tr>
+    <tr><td>"More indexes always make it faster."</td><td>Indexes speed reads but slow every write and cost storage.</td></tr>
+    <tr><td>"If it inserted without an error, the design is right."</td><td>Test by inserting bad data: a good design rejects it.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="lo-map" data-nav="Learning outcomes and CW1">
+  <div class="sec-head"><span class="sec-num">F4</span><h3>What this topic counts towards</h3></div>
+  <div class="tbl"><table><thead><tr><th>Module outcome</th><th>How this topic builds it</th><th>Assessed</th></tr></thead><tbody>
+    <tr><td><b>LO1</b> Understand big data and how storage paradigms address it</td><td>Data forms, the Vs, database families, the relational model, design and SQL</td><td>CW1: 60-minute open-book lab test, Week 7 (9 Nov). Topics include general database concepts and relational databases.</td></tr>
+    <tr><td><b>LO2</b> Appraise paradigms and when to apply them</td><td>Which family for which data; ACID and its trade-offs</td><td>CW2 (technology justification)</td></tr>
+    <tr><td><b>LO4</b> Select and apply skills to data in a range of paradigms</td><td>Building and querying a real MySQL database</td><td>CW2 (solution and analysis)</td></tr>
+  </tbody></table></div>
+  <p class="note">CW1 is open book: your notes, slides and lab logs are allowed. Keep your Practical 1 SQL and the outputs you got; they are your best revision material.</p>
+</section>
+
+<section id="f-gloss" data-nav="Key terms">
+  <div class="sec-head"><span class="sec-num">F5</span><h3>Key terms</h3></div>
+  <dl class="gloss"><dt id="g-acid">ACID</dt><dd>Atomicity, Consistency, Isolation, Durability: the guarantees a relational transaction gives.</dd><dt id="g-alternate-key">Alternate key</dt><dd>A candidate key not chosen as the primary key; enforced with UNIQUE.</dd><dt id="g-anomaly">Anomaly</dt><dd>An update, insertion or deletion problem caused by storing a fact more than once.</dd><dt id="g-attribute">Attribute</dt><dd>A column; a fact describing an entity.</dd><dt id="g-candidate-key">Candidate key</dt><dd>A minimal set of columns that uniquely identifies a row.</dd><dt id="g-cardinality-er">Cardinality (ER)</dt><dd>How many: 1:1, 1:N or M:N. (In the relational model, cardinality also means the number of rows.)</dd><dt id="g-composite-key">Composite key</dt><dd>A key made of two or more columns together.</dd><dt id="g-constraint">Constraint</dt><dd>A rule the DBMS enforces: PRIMARY KEY, FOREIGN KEY, NOT NULL, UNIQUE, CHECK, DEFAULT.</dd><dt id="g-dbms">DBMS</dt><dd>Database management system: the software that creates, manages, queries and protects a database.</dd><dt id="g-ddl-dml">DDL / DML</dt><dd>Data Definition Language changes structure (CREATE, ALTER, DROP); Data Manipulation Language changes rows (INSERT, UPDATE, DELETE).</dd><dt id="g-degree">Degree</dt><dd>The number of columns in a relation.</dd><dt id="g-derived-attribute">Derived attribute</dt><dd>A value calculated from others (Age from DateOfBirth); usually not stored.</dd><dt id="g-entity">Entity</dt><dd>A thing the organisation stores data about: Student, Module.</dd><dt id="g-foreign-key">Foreign key</dt><dd>A column whose values must match a primary key in another (or the same) table.</dd><dt id="g-functional-dependency">Functional dependency</dt><dd>A → B: knowing A determines exactly one value of B.</dd><dt id="g-index">Index</dt><dd>A structure that lets the DBMS find rows without reading the whole table.</dd><dt id="g-join">JOIN</dt><dd>Combines rows from two tables where a condition (usually PK = FK) matches.</dd><dt id="g-multivalued-attribute">Multivalued attribute</dt><dd>An attribute that can hold several values (phone numbers); mapped to its own table.</dd><dt id="g-normal-forms">Normal forms</dt><dd>1NF: atomic values. 2NF: no partial dependency. 3NF: no transitive dependency.</dd><dt id="g-null">NULL</dt><dd>Missing, unknown or not applicable. Not zero, not empty text. Tested with IS NULL.</dd><dt id="g-participation">Participation</dt><dd>Whether taking part in a relationship is compulsory (total, double line) or optional (partial).</dd><dt id="g-primary-key">Primary key</dt><dd>The candidate key chosen to identify rows; unique and never NULL.</dd><dt id="g-rdbms">RDBMS</dt><dd>A DBMS based on the relational model: tables, keys and SQL.</dd><dt id="g-referential-integrity">Referential integrity</dt><dd>Every foreign key value refers to a row that exists.</dd><dt id="g-relation-tuple">Relation / tuple</dt><dd>Formal names for a table and a row.</dd><dt id="g-super-key">Super key</dt><dd>Any set of columns that uniquely identifies a row (not necessarily minimal).</dd><dt id="g-transaction">Transaction</dt><dd>A group of statements that succeed or fail as one unit.</dd><dt id="g-weak-entity">Weak entity</dt><dd>An entity identified only together with its owner (dependent of an employee).</dd></dl>
+</section>
+
+<section id="f-exit" data-nav="Exit self-check">
+  <div class="sec-head"><span class="sec-num">F6</span><h3>Exit self-check</h3></div>
+  <p class="note">Rate yourself honestly. Ratings stay in this browser only.</p>
+  <div class="rate">
+    <div class="rate-row" data-key="spectrum"><span>I can classify data and explain the Vs of Big Data.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="keys"><span>I can tell a candidate key from a super key, and say where a foreign key goes.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="er"><span>I can draw a Chen ER diagram from business rules and map it to tables.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="nf"><span>I can normalise a table to 3NF and name the dependency each step removes.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="sql"><span>I can create, fill and query a MySQL database, including JOIN and GROUP BY.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="acid"><span>I can explain what indexes and ACID transactions are for.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+  </div>
+</section>
+
+<nav class="pager" aria-label="Topic navigation">
+  <a href="../index.html"><span class="k">Back</span>Home and schedule</a>
+  <a class="nx" href="nosql.html"><span class="k">Next · Week 2</span>NoSQL concepts</a>
+</nav>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · QA Higher Education · Ulster University MSc · 2026/27</span><span>Synthetic data only. Results marked "Verified" were captured on MySQL 8.0.46.</span></footer>
+</div>
+</div>
+<script src="../assets/js/schedule.js"></script>
+<script src="../assets/js/search-index.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/vendor/sql-asm-1.10.3.js"></script>
+<script src="../assets/js/relational-data.js"></script>
+<script src="../assets/js/demos-relational.js"></script>
+<script src="../assets/js/relational-content.js"></script>
+<script src="../assets/js/relational.js"></script>
+</body>
+</html>

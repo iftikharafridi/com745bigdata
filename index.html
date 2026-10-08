@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 Big Data Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body data-root="" data-page="home">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+<header class="hero">
+  <span class="eyebrow">Ulster University MSc · QA Higher Education · Semester 1, 2026/27</span>
+  <h1>COM745 Big Data and Infrastructure</h1>
+  <p class="lead">Lecture explanations, live demonstrations, interactive explorers and your practicals in one place: from a relational database you design yourself, through NoSQL, to Hadoop and Spark.</p>
+  <div class="chips"><span class="chip">20 credits · Level 7</span><span class="chip">CW1 lab test 25% · 9 Nov</span><span class="chip">CW2 data lake project 75% · 11 Dec</span></div>
+</header>
+
+<section id="start" data-nav="Start here">
+  <div class="sec-head"><h2>Start here</h2></div>
+  <div class="grid3">
+    <a class="card wkcard" href="topics/relational.html"><span class="k">Week 1 · ready</span><h3>Relational databases and MySQL</h3><p class="note">Design, build and query the university database. Practicals 0 and 1.</p></a>
+    <a class="card wkcard" href="topics/mongodb.html"><span class="k">Week 2 · ready</span><h3>NoSQL and MongoDB</h3><p class="note">The same university as documents. Practicals 3 and 4, and a mongosh playground.</p></a>
+    <a class="card wkcard" href="topics/influxdb.html"><span class="k">Week 3 · ready</span><h3>Time series and InfluxDB</h3><p class="note">Campus sensor readings in InfluxDB 1.x. Practicals 6 and 7, and an InfluxQL playground.</p></a>
+    <a class="card wkcard" href="topics/neo4j.html"><span class="k">Week 4 · ready</span><h3>Graph databases and Neo4j</h3><p class="note">The university as a graph. Practicals 9 and 10, and a Cypher playground with a graph view.</p></a>
+    <a class="card wkcard" href="demos.html"><span class="k">For class</span><h3>Demonstration library</h3><p class="note">Step-by-step demos with verified output, ready to present.</p></a>
+    <a class="card wkcard" href="topics/relational.html#c-playground"><span class="k">Try it now</span><h3>Four playgrounds</h3><p class="note">Run SQL, mongosh, InfluxQL or Cypher in your browser, no install needed.</p></a>
+  </div>
+</section>
+
+<section id="how" data-nav="How each topic works">
+  <div class="sec-head"><h2>How each topic works</h2></div>
+  <p class="prose">Every topic page follows the same six parts, so you always know where to look.</p>
+  <div class="tbl"><table><thead><tr><th>Part</th><th>What you do there</th></tr></thead><tbody>
+    <tr><td><b>A Understand</b></td><td>The ideas and why they matter, with diagrams and small explorers next to each idea.</td></tr>
+    <tr><td><b>B Watch the demonstration</b></td><td>The lecturer's step-by-step demos, with the real output of every command.</td></tr>
+    <tr><td><b>C Explore</b></td><td>Change inputs, run things and watch what happens.</td></tr>
+    <tr><td><b>D Practise</b></td><td>Short class exercises with answers to check.</td></tr>
+    <tr><td><b>E Complete independently</b></td><td>The official practicals with their original task numbers, hints and troubleshooting.</td></tr>
+    <tr><td><b>F Check understanding</b></td><td>A quiz with feedback, misconceptions, key terms and a self-check.</td></tr>
+  </tbody></table></div>
+  <p class="note">Badges tell you what you are looking at: <span class="badge b-ver">Verified</span> output captured from the real software, <span class="badge b-real">Real SQLite engine</span> a real database in the page, <span class="badge b-emu">Checked with a MongoDB emulator</span> two independent emulators agree, <span class="badge b-sim">Simulation</span> a teaching model. <a href="labs.html#badges">More about the badges</a>.</p>
+</section>
+
+<section id="weeks" data-nav="Teaching plan">
+  <div class="sec-head"><h2>Teaching plan</h2></div>
+  <p class="note">Follows the module handbook (pp.19-21). The order may change during the semester; this table and the menu always show the current plan.</p>
+  <div data-schedule></div>
+</section>
+
+<section id="assessment" data-nav="Assessment">
+  <div class="sec-head"><h2>Assessment</h2></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Coursework 1 · 25%</span><h3>Practical skills test</h3>
+      <p>60 minutes, open book, on campus in the Week 7 lab: <b>Monday 9 November 2026</b>. Covers general database concepts, relational, NoSQL, document, time-series and graph databases. Assesses <b>LO1</b>.</p>
+      <p class="note">Revise with Part F of each database topic and keep your practical logs: you may use them in the test.</p></div>
+    <div class="card"><span class="k">Coursework 2 · 75%</span><h3>Data lake project and video</h3>
+      <p>Released Week 4; due <b>Friday 11 December 2026, 12:00</b>. Find public datasets on education level and related deaths, load them into a data lake technology from the module, analyse and visualise them, and present a 15-slide deck with an embedded 5-minute video demonstration. Assesses <b>LO2, LO3, LO4</b>.</p>
+      <p class="note">The CW2 method page (planned for Week 11) covers each stage with a different worked example.</p></div>
+  </div>
+</section>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · QA Higher Education · Ulster University</span><span>Progress and self-check ratings are kept only in your browser.</span></footer>
+</div>
+</div>
+<script src="assets/js/schedule.js"></script>
+<script src="assets/js/search-index.js"></script>
+<script src="assets/js/site.js"></script>
+</body>
+</html>

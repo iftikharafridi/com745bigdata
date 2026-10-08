@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 InfluxDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+</head>
+<body data-root="../" data-page="influxdb">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="../index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure · Week 3</span>
+  <h1>Time-series databases and InfluxDB</h1>
+  <p class="lead">Sensor readings from three campus rooms on one teaching day. You will see why data that arrives continuously, stamped with a time, gets a database of its own, write it in line protocol, design tags and fields so it stays fast, and summarise it over time with InfluxQL.</p>
+  <div class="chips">
+    <span class="chip">Lecture 5 · Practicals 6-7</span>
+    <span class="chip">InfluxDB 1.x + the influx shell</span>
+    <span class="chip">Dataset: <a href="../labs.html#campus">campus sensors</a></span>
+    <span class="chip">Assessed in CW1 (LO1)</span>
+  </div>
+  <nav class="toc" aria-label="On this page">
+    <a href="#understand">A Understand</a><a href="#demo">B Watch</a><a href="#explore">C Explore</a><a href="#practise">D Practise</a><a href="#independent">E Practicals</a><a href="#check">F Check</a>
+  </nav>
+</header>
+
+<section id="outcomes" data-nav="Learning outcomes">
+  <div class="sec-head"><h2>What you will be able to do</h2></div>
+  <ul class="lo-list">
+    <li><span class="lo">T1</span><span>Explain what makes data a time series, and what a time-series database optimises for and gives up.</span></li>
+    <li><span class="lo">T2</span><span>Name the parts of InfluxDB's data model (measurement, tags, fields, timestamp, point, series) and write points in line protocol.</span></li>
+    <li><span class="lo">T3</span><span>Design a schema: choose tags and fields, avoid high series cardinality, and decide what belongs in another kind of database.</span></li>
+    <li><span class="lo">T4</span><span>Query with InfluxQL: filter by tags, fields and time, aggregate with GROUP BY time() and fill(), and use time-series functions.</span></li>
+    <li><span class="lo">T5</span><span>Manage data over time with retention policies and DELETE, and say when a time-series database is the right choice.</span></li>
+  </ul>
+  <p class="callout"><b>About the results on this page.</b> Every demonstration and practice output was captured by typing the commands into the influx shell of a real <span class="badge b-ver">InfluxDB 1.6.7</span> server. The lab PCs run InfluxDB 1.8, which uses the same InfluxQL and prints the same results; times written without a timestamp will show your own date. The playground and explorers run a small InfluxQL engine written for this site, checked against the same server: 377 commands compared: 356 identical, 21 identical apart from the order of rows with the same timestamp or the last digit of a decimal, 0 different.</p>
+</section>
+
+<!-- ============================== A ============================== -->
+<div class="part" id="understand" data-nav="A · Understand"><span class="letter">A</span><h2>Understand</h2><p>Why time gets a database of its own, and how InfluxDB stores it.</p></div>
+
+<section id="a-what" data-nav="What is time-series data?">
+  <div class="sec-head"><span class="sec-num">A1</span><h3>What is time-series data?</h3></div>
+  <div class="prose">
+    <p>A <b>time series</b> is a sequence of measurements, each stamped with the moment it was taken: a temperature every 30 minutes, a smart meter every second, a server's CPU load, GPS positions, card transactions, clicks on a page. Lecture 5 calls them <i>time-based logs</i>.</p>
+    <p>Each record answers three questions: <b>when</b> (the timestamp), <b>what was measured</b> (the values) and <b>about what</b> (which sensor, room or server). Records are added, almost never changed, and read back in blocks of time: "the last hour", "every day in January".</p>
+  </div>
+  <div class="grid3">
+    <div class="card"><span class="k">Is it a time series?</span><p>A smart meter's readings: <b>yes</b>. New values arrive constantly; you ask about periods.</p></div>
+    <div class="card"><span class="k">Is it a time series?</span><p>A student's record (name, course, status): <b>no</b>. You look it up by key and update it. That is Week 1 or Week 2 data.</p></div>
+    <div class="card"><span class="k">Is it a time series?</span><p>Bank transactions: <b>yes, and also more</b>. They are time-stamped events, but also need transactions and constraints. Many systems keep both.</p></div>
+  </div>
+  <p class="note">In the lecture notes, purpose-built time-series databases are described as many times faster than MongoDB or an RDBMS for this workload. Benchmark figures like these depend on the workload and on who ran the test, so treat them as an order of magnitude, not a promise.</p>
+</section>
+
+<section id="a-why" data-nav="What a TSDB optimises">
+  <div class="sec-head"><span class="sec-num">A2</span><h3>What a time-series database optimises</h3></div>
+  <div class="tbl"><table><thead><tr><th>Characteristic of the workload (Lecture 5)</th><th>How InfluxDB is built for it</th></tr></thead><tbody>
+    <tr><td>Time is the main way data is found</td><td>Every point has a timestamp and data is stored in time order, in <b>shards</b> that each cover one block of time.</td></tr>
+    <tr><td>Very many writes, arriving roughly in time order</td><td>Writes are appended to a log and compacted later (the TSM storage engine), rather than inserted into a B-tree in place.</td></tr>
+    <tr><td>Data is rarely updated</td><td>There is no UPDATE statement. Writing the same series and timestamp again overwrites the values.</td></tr>
+    <tr><td>Old data is removed in large blocks</td><td>Retention policies drop whole shards when they expire. DELETE works by time and tag, not by individual values.</td></tr>
+    <tr><td>Queries read consecutive blocks of time</td><td>Values of one field from one series are stored together and compressed, so scanning a range is fast.</td></tr>
+    <tr><td>Disk I/O, not CPU or RAM, is the bottleneck</td><td>Compression (often to a few bytes per value) means far less is read from disk.</td></tr>
+  </tbody></table></div>
+  <div class="callout"><b>Think, before Practical 6 T0.</b> Every optimisation in the right-hand column makes something else harder. For each row, ask: what does this make difficult? Updating one record? Enforcing that an e-mail address is unique? Joining a reading to the user who owns the sensor? Your answers are the limitations Practical 6 asks you to explain.</div>
+</section>
+
+<section id="a-model" data-nav="The data model">
+  <div class="sec-head"><span class="sec-num">A3</span><h3>The data model: measurements, tags, fields and series</h3></div>
+  <div class="lp-anatomy" aria-label="Parts of one point">
+    <code><span class="lp-m">room_env</span>,<span class="lp-t">room=lab_1,room_type=lab</span> <span class="lp-f">temp_c=19.6,co2_ppm=612i,occupancy=14i</span> <span class="lp-ts">1770022800000000000</span></code>
+    <div class="lp-legend"><span class="lp-m">measurement</span><span class="lp-t">tag set</span><span class="lp-f">field set</span><span class="lp-ts">timestamp</span></div>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Term</th><th>Meaning</th><th>In the campus data</th></tr></thead><tbody>
+    <tr><td><b>Measurement</b></td><td>The name for a kind of point; plays the part of a table name.</td><td><code>room_env</code>, <code>energy</code></td></tr>
+    <tr><td><b>Tag</b> (key=value)</td><td>Metadata describing what was measured. <b>Indexed.</b> Always a string. Used in WHERE and GROUP BY.</td><td><code>room=lab_1</code>, <code>room_type=lab</code></td></tr>
+    <tr><td><b>Field</b> (key=value)</td><td>The measured values. <b>Not indexed.</b> Typed: float, integer, string or boolean. Used in functions.</td><td><code>temp_c=19.6</code>, <code>co2_ppm=612i</code></td></tr>
+    <tr><td><b>Timestamp</b></td><td>When it was measured: nanoseconds since 1 January 1970 UTC.</td><td><code>1770022800000000000</code> = 2026-02-02T09:00:00Z</td></tr>
+    <tr><td><b>Point</b></td><td>One record: a timestamp with its fields, in one series. Like a row.</td><td>lab_1 at 09:00</td></tr>
+    <tr><td><b>Series</b></td><td>All the points that share a measurement, tag set (and retention policy). The index stores series.</td><td>3 series in room_env, one per room</td></tr>
+  </tbody></table></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Foodships in SQL (Lecture 5, slide 16)</span><p>A table <code>foodships(park_id, planet, time, #_foodships)</code>. park_id, planet and time are indexed; the count is not.</p></div>
+    <div class="card"><span class="k">Foodships in InfluxDB (slide 17)</span><p>Measurement <code>foodships</code> ≈ the table. Tags <code>park_id</code>, <code>planet</code> ≈ the indexed columns. Field <code>#_foodships</code> ≈ the unindexed column. Points ≈ rows. Nothing is declared in advance: the first write creates it.</p></div>
+  </div>
+  <figure class="figure explorer" data-explorer="lineproto">
+    <div class="title"><span class="tagx">Explorer</span><h3>Take a point apart</h3><span class="badge b-emu">InfluxQL emulator</span></div>
+    <p class="caption">Type or pick line-protocol points. Each line is split into its parts, then written to an empty database, and you see what InfluxDB would reply and store.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-write" data-nav="Writing points">
+  <div class="sec-head"><span class="sec-num">A4</span><h3>Writing points: line protocol and timestamps</h3></div>
+  <div class="prose">
+    <p>Lecture 5, slide 29: <code>INSERT &lt;measurement&gt;[,&lt;tag-key&gt;=&lt;tag-value&gt;...] &lt;field-key&gt;=&lt;field-value&gt;[,...] [unix-nano-timestamp]</code>. In the influx shell you type <code>INSERT</code> and one point; in a file for <code>influx -import</code> (and from programs) you write the point alone.</p>
+  </div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">The rules that catch people out</span><ul class="list">
+      <li>Exactly <b>one space</b> before the fields and one before the timestamp. Any other space must be escaped: <code>room=lab\ 1</code>.</li>
+      <li>A number is a <b>float</b> unless it ends in <code>i</code> (integer). <code>co2_ppm=612i</code>.</li>
+      <li>String fields need <b>double quotes</b>: <code>note="door open"</code>. Tag values never have quotes.</li>
+      <li>The first value written fixes a field's type: <code>co2_ppm=650</code> after <code>612i</code> is rejected.</li>
+      <li>No timestamp: the server uses its own clock.</li>
+      <li>Same series + same timestamp = the same point. The second write <b>overwrites</b> its fields. That is the only "update".</li>
+    </ul></div>
+    <div class="card"><span class="k">Timestamps and precision</span><ul class="list">
+      <li>InfluxDB counts <b>nanoseconds</b>. Most Unix converters give <b>seconds</b>: add nine zeros, or type <code>precision s</code> before inserting.</li>
+      <li><code>precision rfc3339</code> makes the shell print readable times (<code>2026-02-02T09:00:00Z</code>). Start every session with <code>influx -precision rfc3339</code>.</li>
+      <li>Times are stored in <b>UTC</b> (the Z). UK time is UTC in winter and UTC+1 (BST) from the last Sunday in March to the last Sunday in October.</li>
+      <li><code>influx -import -path=file.txt -precision=s</code> loads a file of points; it is run in a terminal, not in the shell.</li>
+    </ul></div>
+  </div>
+  <figure class="figure explorer" data-explorer="timeconv">
+    <div class="title"><span class="tagx">Explorer</span><h3>Timestamp converter</h3><span class="badge b-real">Calculated in your browser</span></div>
+    <p class="caption">Turn a date and time into the numbers InfluxDB expects, or paste a number to see when it is. Handles UK summer time, which matters in Practical 7 T8.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-schema" data-nav="Schema design">
+  <div class="sec-head"><span class="sec-num">A5</span><h3>Schema design: tag or field?</h3></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Make it a tag when (slides 18-19)</span><ul class="list">
+      <li>it is metadata you filter on often (which room, which sensor);</li>
+      <li>you will GROUP BY it;</li>
+      <li>it has a limited set of values that does not grow with every reading.</li></ul></div>
+    <div class="card"><span class="k">Make it a field when</span><ul class="list">
+      <li>it is the measured value;</li>
+      <li>you will use it in a function: mean(), max(), count(), spread();</li>
+      <li>it must keep a number type (tags are always strings);</li>
+      <li>its values are unique or unbounded (IDs, hashes, e-mail addresses).</li></ul></div>
+  </div>
+  <div class="prose"><p>Slides 20-21 add: one piece of information per tag; letters and underscores only in names; no InfluxQL keywords as names; and <b>no data in the measurement name</b>. Slides 22-23 show why with blueberries:</p></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Bad: data in the measurement name</span>
+      <div class="code" data-lang="influxql"><pre>blueberries.plot-1.north temp=50.1 1472515200000000000
+blueberries.plot-2.midwest temp=49.8 1472515200000000000
+blueberries.plot-3.north temp=51.3 1472515200000000000
+
+SELECT mean(temp) FROM /\.north$/</pre></div>
+      <p class="note">One answer per measurement (50.1 and 51.3): no single average for the north. Demo 6.</p></div>
+    <div class="card"><span class="k">Good: the same data in tags</span>
+      <div class="code" data-lang="influxql"><pre>weather_sensor,crop=blueberries,plot=1,region=north temp=50.1 …
+weather_sensor,crop=blueberries,plot=2,region=midwest temp=49.8 …
+weather_sensor,crop=blueberries,plot=3,region=north temp=51.3 …
+
+SELECT mean(temp) FROM weather_sensor WHERE region = 'north'</pre></div>
+      <p class="note">One answer, 50.7, and GROUP BY region gives every region at once.</p></div>
+  </div>
+  <div class="prose"><p><b>Series cardinality</b> is the number of distinct series. Each one lives in the index, so a tag whose values never repeat (a reading ID, a timestamp, a user's e-mail) creates a new series with every point and memory use climbs without limit. Try it with the Practical 7 sensors:</p></div>
+  <figure class="figure explorer" data-explorer="cardinality">
+    <div class="title"><span class="tagx">Explorer</span><h3>Tag, field, or somewhere else?</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">It starts from a common first attempt: everything is stored with every reading. Change the role of each attribute and scale up the number of sensors until the warnings are gone. The counts are calculated from your choices; the warnings apply the rules in Lecture 5.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-query" data-nav="Querying with InfluxQL">
+  <div class="sec-head"><span class="sec-num">A6</span><h3>Querying with InfluxQL</h3></div>
+  <div class="prose">
+    <p>InfluxQL looks like SQL, with concessions (no joins, ORDER BY time only, GROUP BY tags and time only) and additions for time.</p>
+  </div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Quotes and case: the silent traps</span><ul class="list">
+      <li><b>Single quotes</b> for values: <code>WHERE room = 'lab_1'</code>.</li>
+      <li><b>Double quotes</b> for names (optional unless odd): <code>SELECT "temp_c"</code>.</li>
+      <li><code>WHERE room = "lab_1"</code> compares with a column called lab_1, so returns <b>nothing, with no error</b>.</li>
+      <li>Names and values are case-sensitive. The slide's <code>SELECT * from CPU WHERE “Value” &gt; 0.9</code> fails on both counts (and its curly quotes).</li>
+    </ul></div>
+    <div class="card"><span class="k">Time in WHERE</span><ul class="list">
+      <li><code>time &gt;= '2026-02-02T09:00:00Z' AND time &lt;= '2026-02-02T12:00:00Z'</code></li>
+      <li><code>time &gt; now() - 1h</code> (units: ns u ms s m h d w)</li>
+      <li>With GROUP BY time(), always give <b>both</b> ends of the range.</li>
+      <li><code>tz('Europe/London')</code> at the end shows local time.</li>
+    </ul></div>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Kind of function</th><th>Returns</th><th>Examples</th></tr></thead><tbody>
+    <tr><td><b>Aggregate</b></td><td>One computed value per group or window; the time is the start of the window (or 1970 with no range).</td><td><code>mean()</code> <code>count()</code> <code>sum()</code> <code>spread()</code> <code>median()</code> <code>stddev()</code></td></tr>
+    <tr><td><b>Selector</b></td><td>One real point, with its real time; other columns from that point may be shown.</td><td><code>max()</code> <code>min()</code> <code>first()</code> <code>last()</code> <code>top()</code> <code>bottom()</code> <code>percentile()</code></td></tr>
+    <tr><td><b>Transformation</b></td><td>A new series computed from the series.</td><td><code>moving_average()</code> <code>difference()</code> <code>derivative()</code> <code>cumulative_sum()</code></td></tr>
+    <tr><td><b>Predictor</b></td><td>Future windows.</td><td><code>holt_winters()</code> (Practical 7 T18, optional)</td></tr>
+  </tbody></table></div>
+  <figure class="figure explorer" data-explorer="windows">
+    <div class="title"><span class="tagx">Explorer</span><h3>GROUP BY time() and fill()</h3><span class="badge b-emu">InfluxQL emulator</span></div>
+    <p class="caption">Dots are the raw readings; bars are what one row of the result represents. lab_2 has one reading missing at 12:30: watch what each fill() option does with the empty window.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-manage" data-nav="Retention and deleting">
+  <div class="sec-head"><span class="sec-num">A7</span><h3>Retention, deleting, and choosing a TSDB</h3></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Retention policies</span><p>Each database has at least one retention policy (RP): how long data is kept. <code>autogen</code> keeps it forever. <code>CREATE RETENTION POLICY thirty_days ON campus DURATION 30d REPLICATION 1</code> keeps 30 days; data older than that is dropped a shard at a time, and points already older are refused on arrival.</p>
+      <p>Adding <code>DEFAULT</code> makes every INSERT and SELECT without a named RP use it. Data in <code>autogen</code> then seems to vanish from queries: it is still there as <code>autogen.room_env</code>.</p></div>
+    <div class="card"><span class="k">Deleting (slides 31-33)</span><ul class="list">
+      <li><code>DELETE FROM room_env WHERE room = 'lab_2' AND time &lt; '…'</code>: tags and time only, never fields.</li>
+      <li><code>DELETE WHERE time &lt; '…'</code> without FROM deletes from every measurement.</li>
+      <li><code>DROP MEASUREMENT energy</code>, <code>DROP SERIES FROM … WHERE tag = '…'</code>, <code>DROP DATABASE campus</code>.</li>
+      <li>"Don't update points; delete and reinsert if absolutely necessary."</li></ul></div>
+  </div>
+  <div class="tbl"><table><thead><tr><th>InfluxDB version</th><th>Query language</th><th>In this module</th></tr></thead><tbody>
+    <tr><td><b>1.x</b> (1.8 on the lab PCs)</td><td>InfluxQL; the influx shell; databases and retention policies</td><td>Taught and assessed. Everything on this page.</td></tr>
+    <tr><td><b>2.x</b></td><td>Flux (a functional scripting language); buckets and tokens; InfluxQL only through a compatibility API</td><td>Not used. If <code>influx</code> asks for a token or an org, you installed 2.x.</td></tr>
+    <tr><td><b>3.x</b></td><td>SQL and InfluxQL, on a columnar (Apache Arrow and Parquet) engine</td><td>Background reading: notice how the industry returned to SQL.</td></tr>
+  </tbody></table></div>
+  <div class="callout"><b>When to choose a time-series database.</b> High-rate, time-stamped, append-only measurements that you query by period and summarise (IoT, monitoring, metering, finance ticks). Not for data you update by key, need to keep unique, or join: users, accounts, sensor descriptions. Real systems use both, linked by an ID. That is exactly Practical 6, and the kind of choice CW2 asks you to justify (LO2).</div>
+</section>
+
+<!-- ============================== B ============================== -->
+<div class="part" id="demo" data-nav="B · Watch the demo"><span class="letter">B</span><h2>Watch the demonstration</h2><p>Six demonstrations in the influx shell, from the first point to retention and schema design.</p></div>
+
+<section id="b-demos" data-nav="Demonstration library">
+  <div class="prose"><p>Each demonstration opens in presenter mode. Follow along in the influx shell, started with <code>influx -precision rfc3339</code>. Demos 3-6 use the campus data: in a terminal, in the folder holding <a href="../data/campus/campus_sensors.txt">campus_sensors.txt</a>, run <code>influx -import -path=campus_sensors.txt -precision=s</code>. To start again, <code>DROP DATABASE campus</code> and import it again.</p></div>
+  <div class="demos" data-demolist="influxdb"></div>
+</section>
+
+<!-- ============================== C ============================== -->
+<div class="part" id="explore" data-nav="C · Explore"><span class="letter">C</span><h2>Explore interactively</h2><p>An influx shell in your browser, and a phrasebook from SQL.</p></div>
+
+<section id="c-playground" data-nav="InfluxQL playground">
+  <div class="sec-head"><span class="sec-num">C1</span><h3>InfluxQL playground</h3></div>
+  <figure class="figure explorer" data-explorer="iplayground">
+    <div class="title"><span class="tagx">Playground</span><h3>Run influx shell commands in your browser</h3><span class="badge b-emu">InfluxQL emulator</span></div>
+    <p class="caption">The campus database is loaded and selected; times print as RFC 3339. Supported: USE, precision, CREATE/DROP DATABASE, SHOW (databases, measurements, series, tag keys and values, field keys, retention policies), INSERT, SELECT with WHERE, GROUP BY tags and time(), fill(), ORDER BY time DESC, LIMIT, tz(), the common functions, retention policies, DELETE and DROP. Not supported: holt_winters(), continuous queries, users, subqueries. It forgets everything when you reload the page.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="c-phrase" data-nav="SQL to InfluxQL phrasebook">
+  <div class="sec-head"><span class="sec-num">C2</span><h3>SQL to InfluxQL phrasebook</h3></div>
+  <p class="prose">The same questions about the campus readings, asked of a MySQL table <code>room_env(time, room, room_type, temp_c, humidity, co2_ppm, occupancy)</code> and of InfluxDB. Notice which ones InfluxQL makes shorter.</p>
+  <div style="display:flex;flex-direction:column;gap:12px"><div class="card"><span class="k">Filter rows</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT time, co2_ppm FROM room_env
+WHERE room = &#x27;lab_1&#x27; AND co2_ppm &gt; 1000
+ORDER BY time;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT co2_ppm FROM room_env WHERE room = &#x27;lab_1&#x27; AND co2_ppm &gt; 1000</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Newest first</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT time, temp_c FROM room_env
+WHERE room = &#x27;lab_2&#x27;
+ORDER BY time DESC LIMIT 3;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT temp_c FROM room_env WHERE room = &#x27;lab_2&#x27; ORDER BY time DESC LIMIT 3</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Average per group</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT room, AVG(temp_c) FROM room_env
+GROUP BY room ORDER BY room;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT mean(temp_c) FROM room_env GROUP BY room</pre></div></div></div><p class="note">InfluxDB returns one small table per room; the time column is 1970-01-01 (no time range).</p><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Hourly windows</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT DATE_FORMAT(time, &#x27;%Y-%m-%d %H:00&#x27;) AS hour,
+       AVG(co2_ppm)
+FROM room_env WHERE room = &#x27;lab_1&#x27;
+GROUP BY hour ORDER BY hour;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT mean(co2_ppm) FROM room_env WHERE room = &#x27;lab_1&#x27; AND time &gt;= &#x27;2026-02-02T08:00:00Z&#x27; AND time &lt;= &#x27;2026-02-02T18:00:00Z&#x27; GROUP BY time(1h) fill(none)</pre></div></div></div><p class="note">SQL needs a formatted string to group on; GROUP BY time(1h) is built in, and fill() decides what an empty hour shows.</p><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Highest value, and when</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT time, co2_ppm, room FROM room_env
+ORDER BY co2_ppm DESC LIMIT 1;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT max(co2_ppm), room FROM room_env</pre></div></div></div><p class="note">max() is a selector, so the time and room of that reading come with it.</p><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Range (max - min)</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT room, MAX(temp_c) - MIN(temp_c) FROM room_env
+GROUP BY room ORDER BY room;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT spread(temp_c) FROM room_env GROUP BY room</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Change from the previous reading</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT time, co2_ppm - LAG(co2_ppm) OVER (ORDER BY time)
+FROM room_env WHERE room = &#x27;lab_1&#x27;
+ORDER BY time;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT difference(co2_ppm) FROM room_env WHERE room = &#x27;lab_1&#x27;</pre></div></div></div><p class="note">SQL also returns the first row, with NULL; InfluxDB starts at the second reading.</p><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Moving average of 3</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT time, AVG(temp_c) OVER (ORDER BY time
+       ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+FROM room_env WHERE room = &#x27;lecture_a&#x27;
+ORDER BY time;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT moving_average(temp_c, 3) FROM room_env WHERE room = &#x27;lecture_a&#x27;</pre></div></div></div><p class="note">SQL also averages the first two rows over fewer readings; InfluxDB waits until three are available.</p><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div><div class="card"><span class="k">Running total</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT time, SUM(kwh) OVER (ORDER BY time)
+FROM energy WHERE room = &#x27;lab_1&#x27;
+ORDER BY time;</pre></div></div><div><div class="code" data-lang="influxql"><pre>SELECT cumulative_sum(kwh) FROM energy WHERE room = &#x27;lab_1&#x27;</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-influx>Run the InfluxQL version in the playground</button></div></div></div><p class="note">Checked: the campus readings were loaded into MySQL 8.0.46 as two tables, and each pair returns the same values from MySQL and from InfluxDB 1.6.7 (9 of 9).</p>
+</section>
+
+<!-- ============================== D ============================== -->
+<div class="part" id="practise" data-nav="D · Practise"><span class="letter">D</span><h2>Practise</h2><p>Short exercises on the campus data. Try them in the playground first.</p></div>
+<section id="d-tasks" data-nav="Practice exercises">
+  <div class="tier t-core"><div class="tier-head"><span class="tag">Core</span><span class="note">Explore and filter (Demos 3-4)</span></div><ol class="tasks">
+<li class="task" id="i1"><div class="task-q"><span class="num">I1</span><span>How many readings does each room have in room_env? One room has fewer: why?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT count(temp_c) FROM room_env GROUP BY room</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT count(temp_c) FROM room_env GROUP BY room
+name: room_env
+tags: room=lab_1
+time                 count
+----                 -----
+1970-01-01T00:00:00Z 21
+
+name: room_env
+tags: room=lab_2
+time                 count
+----                 -----
+1970-01-01T00:00:00Z 20
+
+name: room_env
+tags: room=lecture_a
+time                 count
+----                 -----
+1970-01-01T00:00:00Z 21</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div><p class="note">lab_2 is missing the 12:30 reading (Demo 4).</p></details></li>
+<li class="task" id="i2"><div class="task-q"><span class="num">I2</span><span>List the times and CO2 levels when lab_1 was above 1000 ppm.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT co2_ppm FROM room_env WHERE room = &#x27;lab_1&#x27; AND co2_ppm &gt; 1000</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT co2_ppm FROM room_env WHERE room = &#x27;lab_1&#x27; AND co2_ppm &gt; 1000
+name: room_env
+time                 co2_ppm
+----                 -------
+2026-02-02T10:00:00Z 1003
+2026-02-02T10:30:00Z 1032
+2026-02-02T11:00:00Z 1039
+2026-02-02T11:30:00Z 1054</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div></details></li>
+<li class="task" id="i3"><div class="task-q"><span class="num">I3</span><span>What was the highest CO2 level in each room, and when?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT max(co2_ppm) FROM room_env GROUP BY room</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT max(co2_ppm) FROM room_env GROUP BY room
+name: room_env
+tags: room=lab_1
+time                 max
+----                 ---
+2026-02-02T11:30:00Z 1054
+
+name: room_env
+tags: room=lab_2
+time                 max
+----                 ---
+2026-02-02T12:00:00Z 897
+
+name: room_env
+tags: room=lecture_a
+time                 max
+----                 ---
+2026-02-02T10:30:00Z 1211</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div><p class="note">max() is a selector, so each row carries the time of that reading.</p></details></li>
+</ol></div>
+<div class="tier t-chal"><div class="tier-head"><span class="tag">Challenge</span><span class="note">Windows and functions (Demos 4-5)</span></div><ol class="tasks">
+<li class="task" id="i4"><div class="task-q"><span class="num">I4</span><span>Show the hourly mean temperature of lecture_a from 08:00 to 18:00, displayed in UK local time.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT mean(temp_c) FROM room_env WHERE room = &#x27;lecture_a&#x27; AND time &gt;= &#x27;2026-02-02T08:00:00Z&#x27; AND time &lt; &#x27;2026-02-02T18:00:00Z&#x27; GROUP BY time(1h) tz(&#x27;Europe/London&#x27;)</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT mean(temp_c) FROM room_env WHERE room = &#x27;lecture_a&#x27; AND time &gt;= &#x27;2026-02-02T08:00:00Z&#x27; AND time &lt; &#x27;2026-02-02T18:00:00Z&#x27; GROUP BY time(1h) tz(&#x27;Europe/London&#x27;)
+name: room_env
+time                 mean
+----                 ----
+2026-02-02T08:00:00Z 18.25
+2026-02-02T09:00:00Z 19.75
+2026-02-02T10:00:00Z 20.75
+2026-02-02T11:00:00Z 20.15
+2026-02-02T12:00:00Z 19.85
+2026-02-02T13:00:00Z 19.7
+2026-02-02T14:00:00Z 20.4
+2026-02-02T15:00:00Z 20.7
+2026-02-02T16:00:00Z 20.35
+2026-02-02T17:00:00Z 20.15</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div><p class="note">In February UK time equals UTC, so the times still end in Z. Run the same clause on the Practical 7 data (October 2017, BST) to see +01:00.</p></details></li>
+<li class="task" id="i5"><div class="task-q"><span class="num">I5</span><span>What was the total energy used on campus in each two-hour block from 08:00 to 18:00?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT sum(kwh) FROM energy WHERE time &gt;= &#x27;2026-02-02T08:00:00Z&#x27; AND time &lt;= &#x27;2026-02-02T18:00:00Z&#x27; GROUP BY time(2h)</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT sum(kwh) FROM energy WHERE time &gt;= &#x27;2026-02-02T08:00:00Z&#x27; AND time &lt;= &#x27;2026-02-02T18:00:00Z&#x27; GROUP BY time(2h)
+name: energy
+time                 sum
+----                 ---
+2026-02-02T08:00:00Z 6.390000000000001
+2026-02-02T10:00:00Z 11.270000000000001
+2026-02-02T12:00:00Z 6.609999999999999
+2026-02-02T14:00:00Z 11.260000000000002
+2026-02-02T16:00:00Z 4.9
+2026-02-02T18:00:00Z 1.9100000000000001</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div><p class="note">The last window (18:00-20:00) holds only the 18:00 readings.</p></details></li>
+<li class="task" id="i6"><div class="task-q"><span class="num">I6</span><span>How much did the CO2 level vary in each room while it was occupied?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT spread(co2_ppm) FROM room_env WHERE occupancy &gt; 0 GROUP BY room</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT spread(co2_ppm) FROM room_env WHERE occupancy &gt; 0 GROUP BY room
+name: room_env
+tags: room=lab_1
+time                 spread
+----                 ------
+1970-01-01T00:00:00Z 327
+
+name: room_env
+tags: room=lab_2
+time                 spread
+----                 ------
+1970-01-01T00:00:00Z 298
+
+name: room_env
+tags: room=lecture_a
+time                 spread
+----                 ------
+1970-01-01T00:00:00Z 460</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div><p class="note">A field (occupancy) in WHERE is allowed; it is just not indexed.</p></details></li>
+</ol></div>
+<div class="tier t-str"><div class="tier-head"><span class="tag">Stretch</span><span class="note">Design thinking</span></div><ol class="tasks">
+<li class="task" id="i7"><div class="task-q"><span class="num">I7</span><span>Which room had the highest average occupancy while in use, and what was it?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="influxql"><pre>SELECT mean(occupancy) FROM room_env WHERE occupancy &gt; 0 GROUP BY room</pre></div><div class="output"><div class="output-head"><span class="badge b-ver">Verified on InfluxDB 1.6.7</span></div><pre>&gt; SELECT mean(occupancy) FROM room_env WHERE occupancy &gt; 0 GROUP BY room
+name: room_env
+tags: room=lab_1
+time                 mean
+----                 ----
+1970-01-01T00:00:00Z 21.5
+
+name: room_env
+tags: room=lab_2
+time                 mean
+----                 ----
+1970-01-01T00:00:00Z 14.181818181818182
+
+name: room_env
+tags: room=lecture_a
+time                 mean
+----                 ----
+1970-01-01T00:00:00Z 52.75</pre></div><div class="controls"><button type="button" class="btn" data-try-influx>Try it in the playground</button></div><p class="note">Compare with capacity (lab_1 30, lab_2 24, lecture_a 80): the lecture theatre is the least full.</p></details></li>
+<li class="task" id="i8"><div class="task-q"><span class="num">I8</span><span>Estates want to add each sensor&#x27;s battery level, its firmware version and a unique ID for every reading. Which should be tags, which fields, and which should not be stored in InfluxDB at all?</span></div><details><summary>Check your answer</summary><pre class="console">battery_pct: field (a measured value you will average and alert on).
+firmware: field if it is only recorded, or a tag if you will GROUP BY it to compare versions; it has few values, so a tag is safe.
+reading_id: never a tag (one new series per point: unbounded cardinality). Store it as a field only if something downstream needs it; usually the series plus the timestamp already identify the reading.
+The sensor&#x27;s model, install date and owner never change per reading: keep them in the relational/document store (Practical 6).</pre></details></li>
+</ol></div>
+</section>
+
+<!-- ============================== E ============================== -->
+<div class="part" id="independent" data-nav="E · Practicals"><span class="letter">E</span><h2>Complete independently</h2><p>Practicals 6 and 7, original task numbers, with setup and troubleshooting.</p></div>
+
+<section id="e-setup" data-nav="Setting up InfluxDB">
+  <div class="sec-head"><span class="sec-num">E1</span><h3>Setting up InfluxDB 1.x</h3></div>
+  <ol class="list prose">
+    <li><b>Lab PCs</b>: download <code>influxdb-1.8.3_windows_amd64.zip</code> from Blackboard (Learning Materials &gt; Supporting Resources &gt; Software) and extract it to <code>C:\</code>. Open a command prompt, <code>cd</code> to the extracted folder and run <code>influxd.exe</code> (the server). Leave that window open. Open a <b>second</b> command prompt in the same folder and run <code>influx.exe -precision rfc3339</code> (the shell). You should see <code>Connected to http://localhost:8086</code> and a <code>&gt;</code> prompt.</li>
+    <li><b>Your own laptop</b>: download InfluxDB <b>1.8</b> (not 2.x or 3.x) from the InfluxData downloads page, "InfluxDB 1.x open source". Windows: unzip it and run the two programs as above. macOS: <code>brew install influxdb@1</code>, then <code>brew services start influxdb@1</code>. If you already use Docker: <code>docker run -d -p 8086:8086 influxdb:1.8</code>, then the influx shell inside it.</li>
+    <li>Load the campus data: in a terminal, in the folder holding <a href="../data/campus/campus_sensors.txt">campus_sensors.txt</a>, run <code>influx -import -path=campus_sensors.txt -precision=s</code>. It reports <code>Processed 95 inserts</code> and <code>Failed 0 inserts</code>.</li>
+    <li><b>Keep a log.</b> Copy each command and its result into a text file as you work through Practical 7. CW1 is open book and lab logs are allowed.</li>
+  </ol>
+</section>
+
+<section id="e-p6" data-nav="Practical 6">
+  <div class="sec-head"><span class="sec-num">E2</span><h3>Practical 6: Data modelling in time-series databases</h3></div>
+  <div class="card"><span class="k">Scenario</span><p>A start-up would like to create a scalable data store to manage their IoT data platform. Specifically, they would like this platform to store information regarding API-keys, sensors and users. Storage of user data will encompass an email address (which acts as a user name), a password hash, forename and surname. API-keys will require storage of the key (a string), rights (an integer) and the email address of the associated user. Sensor data will require the sensor ID, sensor label, sensor class, location (string) and raw sensor data to be stored.</p></div>
+<p class="prose">Time series databases (TSDBs) are built to store large volumes of variable data arriving at a high rate. The optimisations that make this possible also limit what should be modelled in a TSDB.</p>
+<ol class="tasks">
+<li class="task" data-key="P6-T0"><div class="task-q"><span class="num">T0</span><span>Identify and explain the limitations introduced by TSDBs. How are these introduced by optimisations?</span></div><details><summary>Hint</summary><p>Take each characteristic in Section A2 (time as the index, append-only writes, few updates, range deletes, tags indexed but fields not) and ask what it makes hard: updating one record, joins, uniqueness, many distinct tag values.</p></details></li>
+<li class="task" data-key="P6-T1"><div class="task-q"><span class="num">T1</span><span>Considering the limitations from T0, devise a top-level storage strategy for the IoT platform. It is expected to use more than one class of database system; use TSDBs where appropriate. Identify the information to be stored, the data types involved, logical groupings of data, and which class of database each group goes in.</span></div><details><summary>Hint</summary><p>Which of users, API keys, sensor descriptions and readings are updated by key and need uniqueness? Which arrive continuously with a timestamp? Weeks 1-2 gave you two other classes to choose from.</p></details></li>
+<li class="task" data-key="P6-T2"><div class="task-q"><span class="num">T2</span><span>Using your output from T1, develop a detailed storage strategy. Include TSDB modelling (measurements, tags, fields) and the model in your other chosen database (tables or documents). Explain your reasoning.</span></div><details><summary>Hint</summary><p>For the TSDB part: which attributes would you filter or GROUP BY (tags), which are the measured values (fields), and which never change for a sensor and belong in the other database? Try the cardinality calculator in Part C.</p></details></li>
+</ol>
+  <p class="note">Use A2 for T0 and the cardinality explorer in A5 to test your T2 design before Practical 7.</p>
+</section>
+
+<section id="e-p7" data-nav="Practical 7">
+  <div class="sec-head"><span class="sec-num">E3</span><h3>Practical 7: Interacting with InfluxQL</h3></div>
+  <p class="prose">InfluxDB is queried with InfluxQL, which looks like SQL with some concessions and additions. Commands are issued in the influx shell. The lab PCs use InfluxDB 1.8: start the server (influxd) in one command prompt and the shell (influx) in a second one.</p>
+<div class="tbl"><table><caption>The five sensors (Practical 7)</caption><thead><tr><th>Sensor ID</th><th>Class</th><th>Label</th><th>Location</th><th>Unit</th></tr></thead><tbody><tr><td class=m>isj72ls</td><td>Temperature</td><td>Blue sensor</td><td>Kitchen</td><td>Celsius</td></tr><tr><td class=m>ka74zx</td><td>Humidity</td><td>Green sensor</td><td>Kitchen</td><td>%</td></tr><tr><td class=m>sks79s</td><td>Light</td><td>White sensor</td><td>Bedroom</td><td>Lumens</td></tr><tr><td class=m>sha69sj</td><td>Temperature</td><td>Red sensor</td><td>Bedroom</td><td>Celsius</td></tr><tr><td class=m>zjs17</td><td>Power usage</td><td>Wemo – tv</td><td>Bedroom</td><td>Watthour</td></tr></tbody></table></div>
+<ol class="tasks">
+<li class="task" data-key="P7-T0"><div class="task-q"><span class="num">T0</span><span>Read about the InfluxDB shell. <a href="https://docs.influxdata.com/influxdb/v1/tools/influx-cli/use-influx-cli/">The influx shell (InfluxDB 1.x)</a></span></div><details><summary>Hint</summary><p>Note the precision command and the -precision and -import options: you will use them.</p></details></li>
+<li class="task" data-key="P7-T1"><div class="task-q"><span class="num">T1</span><span>Read the commands to explore data. <a href="https://docs.influxdata.com/influxdb/v1/query_language/explore-data/">Explore data using InfluxQL</a></span></div><details><summary>Hint</summary><p>SELECT, WHERE, GROUP BY, ORDER BY time DESC, LIMIT and the time syntax. Demos 3-4 cover the same ground.</p></details></li>
+<li class="task" data-key="P7-T2"><div class="task-q"><span class="num">T2</span><span>Using the shell, create a database to store the raw sensor data of the scenario you designed in Practical 6.</span></div><details><summary>Hint</summary><p>One command, then select it with USE.</p></details></li>
+<li class="task" data-key="P7-T3"><div class="task-q"><span class="num">T3</span><span>Determine and execute the command needed to list the databases. Use it to verify you have created your database.</span></div><details><summary>Hint</summary><p>Lecture 5, slide 26.</p></details></li>
+<li class="task" data-key="P7-T4"><div class="task-q"><span class="num">T4</span><span>You have been instructed to implement a retention policy where sensor data is only stored for the previous 30 days. Create a retention policy for the raw sensor data database to facilitate this.</span></div><details><summary>Hint</summary><p>CREATE RETENTION POLICY … ON … DURATION … REPLICATION 1. Before you add DEFAULT, think about T8: what is the date of the data you will insert? (Demo 6, step 2.)</p></details></li>
+<li class="task" data-key="P7-T5"><div class="task-q"><span class="num">T5</span><span>Read the lecture slides and the manual linked in T1 to understand what these terms mean in InfluxDB: series, measurement and point.</span></div><details><summary>Hint</summary><p>Check your definitions against Section A3 and Demo 1.</p></details></li>
+<li class="task" data-key="P7-T6"><div class="task-q"><span class="num">T6</span><span>Read the recommended schema design of the InfluxDB manual. <a href="https://docs.influxdata.com/influxdb/v1/concepts/schema_and_data_layout/">Schema design and data layout</a></span></div><details><summary>Hint</summary><p>Tags for metadata you filter and group by, fields for values you compute on; no data in measurement names; avoid unbounded tag values.</p></details></li>
+<li class="task" data-key="P7-T7"><div class="task-q"><span class="num">T7</span><span>You now have to store raw sensor data for the five sensors in the table above. Using the documentation, decide how best to store this data. Consider how it should be modelled with tags, fields and unique series.</span></div><details><summary>Hint</summary><p>How many series should five sensors produce? Which columns of the table never change for a sensor, and do they need to be in every point? Tag values with spaces need escaping, and are case-sensitive.</p></details></li>
+<li class="task" data-key="P7-T8"><div class="task-q"><span class="num">T8</span><span>Insert 10 records for each sensor: an hourly sample from 09:00 to 18:00 (09:00, 10:00, … 18:00) on 27/10/2017. A Unix time converter may help. Model reasonable variation in the readings.</span></div><details><summary>Hint</summary><p>Influx uses nanoseconds; most converters give seconds. Either add nine zeros or type precision s in the shell first (then precision rfc3339 to read times back). Decide whether 09:00 means UTC or UK time: on 27/10/2017 the UK was still on BST.</p></details></li>
+<li class="task" data-key="P7-T9"><div class="task-q"><span class="num">T9</span><span>Use SHOW SERIES and SHOW TAG KEYS to explore how your data has been stored. Is it optimal, given the lecture notes and the documentation? If not, optimise it.</span></div><details><summary>Hint</summary><p>Count your series. Look for tags that never vary for a sensor, values stored as tags (strings), or one measurement per sensor.</p></details></li>
+<li class="task" data-key="P7-T10"><div class="task-q"><span class="num">T10</span><span>Write and execute a query to retrieve all records for sensor ID isj72ls.</span></div><details><summary>Hint</summary><p>A tag filter: single quotes.</p></details></li>
+<li class="task" data-key="P7-T11"><div class="task-q"><span class="num">T11</span><span>Write and execute a query to retrieve all the records for sensors in the bedroom.</span></div><details><summary>Hint</summary><p>Match the exact tag value you stored (case matters).</p></details></li>
+<li class="task" data-key="P7-T12"><div class="task-q"><span class="num">T12</span><span>Write and execute a query to retrieve all the records for the sensors that measure temperature.</span></div><details><summary>Hint</summary><p>Depends on your T7 model: a tag filter, or a measurement.</p></details></li>
+<li class="task" data-key="P7-T13"><div class="task-q"><span class="num">T13</span><span>Write and execute a query to retrieve all records for sensor ID isj72ls between 10:31 and 13:37.</span></div><details><summary>Hint</summary><p>Two time conditions in RFC 3339 format, joined with AND.</p></details></li>
+<li class="task" data-key="P7-T14"><div class="task-q"><span class="num">T14</span><span>Write and execute a query to determine the maximum temperature recorded by all the temperature sensors.</span></div><details><summary>Hint</summary><p>max() is a selector: it returns the time of the reading. Do you want one maximum overall, or one per sensor?</p></details></li>
+<li class="task" data-key="P7-T15"><div class="task-q"><span class="num">T15</span><span>Write and execute a query to determine the moving average of the temperature in the kitchen. <a href="https://docs.influxdata.com/influxdb/v1/query_language/functions/#moving_average">MOVING_AVERAGE()</a></span></div><details><summary>Hint</summary><p>moving_average(field, N) over one series. Choose N and say why.</p></details></li>
+<li class="task" data-key="P7-T16"><div class="task-q"><span class="num">T16</span><span>Write and execute a query to determine the spread of temperatures across all relevant sensors. <a href="https://docs.influxdata.com/influxdb/v1/query_language/functions/#spread">SPREAD()</a></span></div><details><summary>Hint</summary><p>One spread across both temperature sensors, or one each? Try both.</p></details></li>
+<li class="task" data-key="P7-T17"><div class="task-q"><span class="num">T17</span><span>Write and execute a query to delete all sensor records for 13:00. Then re-run T12-T16.</span></div><details><summary>Hint</summary><p>DELETE with a time condition only. Which results change, and why does T14 or T16 change only if 13:00 held an extreme value?</p></details></li>
+<li class="task" data-key="P7-T18"><div class="task-q"><span class="num">T18</span><span>Optional. Holt-Winters prediction extrapolates likely future values from time series data, traditionally done in a statistics package or a specialised library. InfluxDB has it built in. Read the documentation to gain an appreciation of this function. <a href="https://docs.influxdata.com/influxdb/v1/query_language/functions/#holt_winters">HOLT_WINTERS()</a></span></div><details><summary>Hint</summary><p>It needs regular windows: holt_winters(mean(value), N, S) with GROUP BY time(). Try forecasting the kitchen temperature for three more hours (Demo 5, last step).</p></details></li>
+</ol>
+  <p class="note" data-progress></p>
+</section>
+
+<section id="e-trouble" data-nav="Troubleshooting">
+  <div class="sec-head"><span class="sec-num">E4</span><h3>Troubleshooting</h3></div>
+  <div class="tbl"><table><thead><tr><th>You see</th><th>When</th><th>What to do</th></tr></thead><tbody><tr><td class="m">Failed to connect to http://localhost:8086: … connection refused</td><td>Starting influx</td><td>The server is not running. Start influxd first (Windows: influxd.exe in its own command prompt, left open), then influx in a second one.</td></tr><tr><td class="m">&#x27;influx&#x27; is not recognized as an internal or external command</td><td>Starting influx</td><td>Open the command prompt in the InfluxDB folder (cd to it) or add the folder to PATH.</td></tr><tr><td class="m">ERR: database name required</td><td>SELECT / SHOW</td><td>Run USE campus (or your database) first.</td></tr><tr><td class="m">Times print as 1770022800000000000</td><td>Any SELECT</td><td>Type precision rfc3339, or start the shell with influx -precision rfc3339.</td></tr><tr><td class="m">No rows and no error</td><td>SELECT</td><td>Values take single quotes (room = &#x27;lab_1&#x27;); names and tag values are case-sensitive; check the time range (now() is today).</td></tr><tr><td class="m">partial write: field type conflict</td><td>INSERT</td><td>The field already has another type: add i to whole numbers consistently.</td></tr><tr><td class="m">unable to parse &#x27;…&#x27;: invalid boolean / missing fields</td><td>INSERT</td><td>A space in the wrong place. One space before the fields, one before the time; escape spaces in tag values (lab\ 1); quote string fields.</td></tr><tr><td class="m">partial write: points beyond retention policy dropped=1</td><td>INSERT</td><td>The point is older than the retention policy keeps (e.g. 2017 data into a 30-day policy). Write to autogen, or do not make the short policy the default.</td></tr><tr><td class="m">Points land in 1970</td><td>INSERT / -import</td><td>Second timestamps read as nanoseconds. Use precision s in the shell, or -precision=s with -import.</td></tr><tr><td class="m">ERR: mixing aggregate and non-aggregate queries is not supported</td><td>SELECT</td><td>Use only aggregates, or one selector (max, min, first, last, top) with other columns.</td></tr><tr><td class="m">Thousands of empty rows</td><td>GROUP BY time()</td><td>Give an upper time bound as well as a lower one.</td></tr><tr><td class="m">ERR: shard N: fields not supported in WHERE clause during deletion</td><td>DELETE</td><td>DELETE filters on tags and time only.</td></tr><tr><td class="m">error: found ‘, expected …</td><td>Pasted code</td><td>Curly quotes from slides or Word. Retype as straight quotes.</td></tr><tr><td class="m">influx: unknown flag -t / Flux errors</td><td>Wrong version</td><td>You installed InfluxDB 2.x or 3.x. The module uses 1.x (the lab PCs run 1.8), which has the influx shell and InfluxQL.</td></tr></tbody></table></div>
+</section>
+
+<section id="e-more" data-nav="More examples">
+  <div class="sec-head"><span class="sec-num">E5</span><h3>More examples for home study</h3></div>
+  <div class="grid2">
+    <div class="card"><span class="k">Downsampling with a continuous query</span><p>Keep raw readings for 30 days and hourly means for ever, computed automatically by the server:</p>
+      <div class="code" data-lang="influxql"><pre>CREATE CONTINUOUS QUERY cq_hourly ON campus BEGIN
+  SELECT mean(temp_c) AS temp_c, max(co2_ppm) AS co2_max
+  INTO autogen.room_env_hourly FROM room_env
+  GROUP BY time(1h), room
+END</pre></div></div>
+    <div class="card"><span class="k">Export a result as CSV</span><p>From a terminal, for a spreadsheet or for pandas:</p>
+      <div class="code" data-lang="shell"><pre>influx -database campus -format csv -precision rfc3339 \
+  -execute "SELECT * FROM room_env WHERE room = 'lab_1'" &gt; lab1.csv</pre></div></div>
+    <div class="card"><span class="k">From Python</span><p>The <code>influxdb</code> package talks to 1.x over HTTP:</p>
+      <div class="code" data-lang="python"><pre>from influxdb import InfluxDBClient
+c = InfluxDBClient('localhost', 8086, database='campus')
+rs = c.query("SELECT mean(temp_c) FROM room_env GROUP BY room")
+for (name, tags), points in rs.items():
+    print(tags['room'], list(points))</pre></div></div>
+    <div class="card"><span class="k">Dashboards</span><p>InfluxDB is usually paired with Grafana (or Chronograf, part of the 1.x "TICK" stack: Telegraf, InfluxDB, Chronograf, Kapacitor). Telegraf collects metrics from hundreds of sources and writes them in line protocol, the same format you typed in Demo 2.</p></div>
+  </div>
+</section>
+
+<!-- ============================== F ============================== -->
+<div class="part" id="check" data-nav="F · Check"><span class="letter">F</span><h2>Check your understanding</h2><p>Quiz, reflection, misconceptions and key terms.</p></div>
+
+<section id="f-quiz" data-nav="Quiz">
+  <div class="sec-head"><span class="sec-num">F1</span><h3>Quiz</h3></div>
+  <div class="quiz" data-quiz="influxdb"></div>
+</section>
+
+<section id="f-reflect" data-nav="Reflect">
+  <div class="sec-head"><span class="sec-num">F2</span><h3>Reflect and discuss</h3></div>
+  <ul class="list prose">
+    <li>You have now stored data in three paradigms. For the Practical 6 platform, which part goes where, and what links the parts?</li>
+    <li>InfluxDB refuses to GROUP BY a field. What does that tell you about deciding tags and fields <i>before</i> data arrives?</li>
+    <li>fill(previous) repeats the last value into an empty window. When is that honest, and when is it misleading (a CO2 alarm? an energy bill)?</li>
+    <li>For CW2: does your dataset have a time dimension that would justify a time-series database? What would the measurement, tags and fields be?</li>
+  </ul>
+</section>
+
+<section id="f-mis" data-nav="Misconceptions">
+  <div class="sec-head"><span class="sec-num">F3</span><h3>Common misconceptions</h3></div>
+  <div class="tbl"><table><thead><tr><th>Students often say…</th><th>Correct it to…</th></tr></thead><tbody>
+    <tr><td>"Tags and fields are just two kinds of column."</td><td>Tags are indexed strings for finding and grouping; fields are typed, unindexed values for computing. The choice decides which queries are possible and fast.</td></tr>
+    <tr><td>"More tags make queries faster, so tag everything."</td><td>Every distinct tag combination is a series in memory. Tags with unbounded values make InfluxDB slower, not faster.</td></tr>
+    <tr><td>"No result means no data."</td><td>Usually double quotes around a value, the wrong letter case, or a time range in the wrong year.</td></tr>
+    <tr><td>"I'll UPDATE the reading."</td><td>There is no UPDATE. Writing the same series and timestamp overwrites; otherwise delete and rewrite.</td></tr>
+    <tr><td>"A 30-day retention policy keeps the last 30 days of my data."</td><td>It keeps data whose <i>timestamps</i> are within 30 days of now. Loading last year's data into it drops every point.</td></tr>
+    <tr><td>"The timestamp converter gave 1509094800, so that's the INSERT time."</td><td>That is seconds; InfluxDB expects nanoseconds unless you set precision s.</td></tr>
+    <tr><td>"mean() and max() work the same way."</td><td>max() is a selector and returns a real point with its real time; mean() is computed, so it has no single time or tag values.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="lo-map" data-nav="Learning outcomes and CW1">
+  <div class="sec-head"><span class="sec-num">F4</span><h3>What this topic counts towards</h3></div>
+  <div class="tbl"><table><thead><tr><th>Module outcome</th><th>How this topic builds it</th><th>Assessed</th></tr></thead><tbody>
+    <tr><td><b>LO1</b> Understand big data and how storage paradigms address it</td><td>The time-series workload, InfluxDB's data model, line protocol and InfluxQL</td><td>CW1 (Week 7, 9 Nov): time-series databases are a listed topic. Open book: lab logs allowed.</td></tr>
+    <tr><td><b>LO2</b> Appraise paradigms and when to apply them</td><td>What a TSDB gives up; splitting data between a TSDB and a relational or document store (Practical 6)</td><td>CW2 technology justification</td></tr>
+    <tr><td><b>LO4</b> Apply skills to data in a range of paradigms</td><td>Writing and summarising time-stamped data in the influx shell</td><td>CW2 analysis</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="f-gloss" data-nav="Key terms">
+  <div class="sec-head"><span class="sec-num">F5</span><h3>Key terms</h3></div>
+  <dl class="gloss"><dt id="gi-aggregate-function">Aggregate function</dt><dd>Summarises many points into one value per group or window: mean(), count(), sum(), spread().</dd><dt id="gi-field">Field</dt><dd>A measured value (temperature, count). Has a type; not indexed.</dd><dt id="gi-fill">fill()</dt><dd>What an empty GROUP BY time() window shows: null (default), none, previous, linear or a number.</dd><dt id="gi-line-protocol">Line protocol</dt><dd>InfluxDB&#x27;s text format for one point: measurement,tags fields timestamp.</dd><dt id="gi-measurement">Measurement</dt><dd>The name for a kind of point, like a table name (room_env).</dd><dt id="gi-point">Point</dt><dd>One record: a timestamp with field values, in one series.</dd><dt id="gi-precision">Precision</dt><dd>The unit of a timestamp (ns, u, ms, s, m, h), or rfc3339 for readable times in the shell.</dd><dt id="gi-retention-policy">Retention policy</dt><dd>How long data is kept (and how many copies); data older than the duration is deleted.</dd><dt id="gi-rfc-3339">RFC 3339</dt><dd>The readable time format InfluxDB uses: 2026-02-02T09:00:00Z (Z = UTC).</dd><dt id="gi-selector-function">Selector function</dt><dd>Returns one real point from a group: max(), min(), first(), last(), top(), percentile().</dd><dt id="gi-series">Series</dt><dd>All points with the same measurement, tag set and retention policy.</dd><dt id="gi-series-cardinality">Series cardinality</dt><dd>The number of distinct series. High cardinality uses memory and slows InfluxDB.</dd><dt id="gi-shard">Shard</dt><dd>A block of data covering one time range; retention deletes whole shards.</dd><dt id="gi-tag">Tag</dt><dd>Indexed metadata (key=value, always a string), used in WHERE and GROUP BY.</dd><dt id="gi-time-series">Time series</dt><dd>A sequence of measurements, each stamped with the time it was taken.</dd><dt id="gi-transformation-function">Transformation function</dt><dd>Computes a new series from a series: moving_average(), derivative(), difference(), cumulative_sum().</dd><dt id="gi-unix-time">Unix time</dt><dd>Time counted from 1970-01-01T00:00:00Z: seconds by most converters, nanoseconds in InfluxDB.</dd></dl>
+</section>
+
+<section id="f-exit" data-nav="Exit self-check">
+  <div class="sec-head"><span class="sec-num">F6</span><h3>Exit self-check</h3></div>
+  <div class="rate">
+    <div class="rate-row" data-key="ts"><span>I can explain what a time-series database optimises and what it gives up.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="model"><span>I can name the measurement, tags, fields and timestamp in a line of line protocol, and count the series.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="design"><span>I can decide what should be a tag, a field, or stored in another database, and justify it.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="query"><span>I can write InfluxQL with WHERE on tags and time, GROUP BY time() and fill().</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="manage"><span>I can create a retention policy and delete data, and explain the effect of DEFAULT.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+  </div>
+</section>
+
+<nav class="pager" aria-label="Topic navigation">
+  <a href="mongodb.html"><span class="k">Previous · Week 2</span>MongoDB</a>
+  <a class="nx" href="../index.html#weeks"><span class="k">Next · Week 4</span>Graph databases and Neo4j (coming soon)</a>
+</nav>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · 2026/27</span><span>Synthetic data only. InfluxDB outputs verified on InfluxDB 1.6.7.</span></footer>
+</div>
+</div>
+<script src="../assets/js/schedule.js"></script>
+<script src="../assets/js/search-index.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/influx-engine.js"></script>
+<script src="../assets/js/influx-data.js"></script>
+<script src="../assets/js/demos-influx.js"></script>
+<script src="../assets/js/influxdb-content.js"></script>
+<script src="../assets/js/influxdb.js"></script>
+</body>
+</html>

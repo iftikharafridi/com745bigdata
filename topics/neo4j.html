@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COM745 Neo4j</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+</head>
+<body data-root="../" data-page="neo4j">
+<div class="layout">
+<aside class="side" aria-label="Module menu"></aside>
+<div class="main">
+<div class="mobilebar">
+  <a class="side-brand" href="../index.html">COM745 Big Data</a>
+  <details class="mnav"><summary>Menu</summary><div class="mnav-panel"></div></details>
+</div>
+<main class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">COM745 Big Data and Infrastructure · Week 4</span>
+  <h1>Graph databases and Neo4j</h1>
+  <p class="lead">The same university again, this time as a graph: students, modules, courses and lecturers as nodes, and every registration and teaching link stored as a relationship you can follow. You will model data as a property graph, query it with Cypher patterns, and decide when connections are the question a database should be built around.</p>
+  <div class="chips">
+    <span class="chip">Lecture 6 · Practicals 9-10</span>
+    <span class="chip">Neo4j + Neo4j Browser</span>
+    <span class="chip">Dataset: <a href="../labs.html#graph">university graph</a></span>
+    <span class="chip">Assessed in CW1 (LO1)</span>
+  </div>
+  <nav class="toc" aria-label="On this page">
+    <a href="#understand">A Understand</a><a href="#demo">B Watch</a><a href="#explore">C Explore</a><a href="#practise">D Practise</a><a href="#independent">E Practicals</a><a href="#check">F Check</a>
+  </nav>
+</header>
+
+<section id="outcomes" data-nav="Learning outcomes">
+  <div class="sec-head"><h2>What you will be able to do</h2></div>
+  <ul class="lo-list">
+    <li><span class="lo">T1</span><span>Explain the property graph model: nodes, labels, relationships, types, directions and properties.</span></li>
+    <li><span class="lo">T2</span><span>Model a scenario as a graph, deciding what is a node, a relationship or a property, and justify it.</span></li>
+    <li><span class="lo">T3</span><span>Create, read, update and delete graph data in Cypher, using MATCH, CREATE, MERGE, SET and DETACH DELETE.</span></li>
+    <li><span class="lo">T4</span><span>Answer multi-hop and path questions with patterns, OPTIONAL MATCH, aggregation, WITH and shortestPath.</span></li>
+    <li><span class="lo">T5</span><span>Say what graph databases are good and bad at, and where they fit beside other stores in a big data platform.</span></li>
+  </ul>
+  <p class="callout"><b>About the results on this page.</b> Neo4j could not be installed in the build environment. Every output was produced by a Cypher emulator written for this site and laid out like cypher-shell (the Text view in Neo4j Browser), and every statement was replayed on FalkorDB, a separate graph database that also runs Cypher: 175 statements replayed on FalkorDB 0.10.0 (via falkordblite): 163 gave the same results, 6 differed only where the two products are documented to differ, 6 used features FalkorDB lacks, 0 unexplained differences. Outputs carry the <span class="badge b-emu">Checked with a Cypher emulator</span> badge until they have been run on Neo4j. Expect the order of properties inside a node, internal ids and the exact wording of error messages to differ slightly in Neo4j.</p>
+</section>
+
+<!-- ============================== A ============================== -->
+<div class="part" id="understand" data-nav="A · Understand"><span class="letter">A</span><h2>Understand</h2><p>From rows and documents to nodes and relationships.</p></div>
+
+<section id="a-why" data-nav="Why graphs?">
+  <div class="sec-head"><span class="sec-num">A1</span><h3>Why a graph database?</h3></div>
+  <div class="prose">
+    <p>A graph database is a NoSQL database that stores data as a <b>connected graph</b> (Lecture 6, slides 3-4). Relational databases store connections indirectly, as matching values in foreign-key columns, and work them out at query time with joins. A graph database stores each connection as a thing in its own right, so following it is a direct step.</p>
+    <p>That makes questions about <i>connections</i> natural and fast: friends of friends, "people who bought this also bought", how two things are linked, chains of any length. Lecture 6's examples are recommendation engines (Facebook's social graph, slides 15-21) and NASA's lessons-learned knowledge graph, where engineers found an Apollo-era answer for Orion "in hours instead of months" (slides 22-25).</p>
+  </div>
+  <div class="grid3">
+    <div class="card"><span class="k">Graph-shaped question</span><p>"Which students share a module with Priya, and what else do they take?" Several hops, each following stored links.</p></div>
+    <div class="card"><span class="k">Graph-shaped question</span><p>"Are these two bank accounts connected through shared phones or addresses, within four steps?" The depth is unknown in advance.</p></div>
+    <div class="card"><span class="k">Not graph-shaped</span><p>"Average mark per module this year." One pass over a table: SQL, or a column store at scale, does this better.</p></div>
+  </div>
+</section>
+
+<section id="a-model" data-nav="The property graph">
+  <div class="sec-head"><span class="sec-num">A2</span><h3>The property graph model</h3></div>
+  <div class="tbl"><table><thead><tr><th>Part</th><th>What it is</th><th>Lecture 6 example (slides 6-11)</th></tr></thead><tbody>
+    <tr><td><b>Node</b></td><td>An entity. Has zero or more <b>labels</b> saying what kind of thing it is.</td><td><code>(:Person {name: 'John', age: 27})</code></td></tr>
+    <tr><td><b>Relationship</b></td><td>A connection between two nodes. Always has exactly one <b>type</b> and one <b>direction</b> (though you can query it either way).</td><td><code>(john)-[:FRIEND_OF]->(sally)</code></td></tr>
+    <tr><td><b>Property</b></td><td>A key-value pair on a node <i>or a relationship</i>: strings, numbers, booleans or lists of them.</td><td><code>since: '2013-09-01'</code> on FRIEND_OF; <code>rating: 5</code> on HAS_READ</td></tr>
+  </tbody></table></div>
+  <figure class="figure explorer" data-explorer="anatomy">
+    <div class="title"><span class="tagx">Explorer</span><h3>Find the nodes, relationships and properties</h3><span class="badge b-sim">Activity</span></div>
+    <p class="caption">Slide 7 asks you to identify the parts of this graph. Pick what to look for, then click every one you can find. Clicking shows the Cypher that would create it.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-design" data-nav="From tables to a graph">
+  <div class="sec-head"><span class="sec-num">A3</span><h3>Modelling: from tables to a graph</h3></div>
+  <div class="grid2 two">
+    <div class="tbl"><table><caption>The university, three ways</caption><thead><tr><th>MySQL (Week 1)</th><th>MongoDB (Week 2)</th><th>Neo4j (this week)</th></tr></thead><tbody>
+      <tr><td>Student row</td><td>students document</td><td><code>(:Student)</code> node</td></tr>
+      <tr><td>Student.CourseCode (FK)</td><td>course field</td><td><code>-[:ENROLLED_ON]-></code></td></tr>
+      <tr><td>Registration table</td><td>embedded registrations array</td><td><code>-[:REGISTERED_ON {semester, date}]-></code></td></tr>
+      <tr><td>Module.LecturerID (FK)</td><td>lecturerId reference</td><td><code>(:Lecturer)-[:TEACHES]-></code></td></tr>
+      <tr><td>CourseModule table</td><td>modules array in course</td><td><code>(:Course)-[:INCLUDES]-></code></td></tr>
+    </tbody></table></div>
+    <div class="card"><span class="k">Rules of thumb</span><ul class="list">
+      <li><b>Nouns</b> become nodes with a label (Student, Module); <b>verbs</b> become relationship types (TEACHES, REGISTERED_ON).</li>
+      <li>A link table becomes a relationship; its extra columns become relationship properties.</li>
+      <li>Something you search or group by, and that many nodes share, may deserve its own node (a Course, a City) rather than a repeated property.</li>
+      <li>A role belongs on the relationship: an actor is a Person who ACTED_IN a Movie, not a different kind of node (Practical 9 T1).</li>
+      <li>Conventions: labels in CamelCase, relationship types in UPPER_SNAKE_CASE, properties in camelCase.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="a-patterns" data-nav="Cypher patterns">
+  <div class="sec-head"><span class="sec-num">A4</span><h3>Querying with Cypher patterns</h3></div>
+  <div class="prose">
+    <p>Cypher describes what to find by drawing it in ASCII art: round brackets for nodes, square brackets for relationships, an arrow for direction (slides 32-52).</p>
+  </div>
+  <div class="code" data-lang="cypher"><pre>MATCH (s:Student {name: 'Priya Patel'})-[r:REGISTERED_ON]->(m:Module)
+WHERE r.semester = 'Semester 1'
+RETURN s.name, m.code, r.date</pre></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Reading the pattern</span><ul class="list">
+      <li><code>s</code>, <code>r</code>, <code>m</code> are variables: names for what matched, used in WHERE and RETURN.</li>
+      <li><code>:Student</code> is a label, <code>:REGISTERED_ON</code> a type. Both are case-sensitive.</li>
+      <li><code>-&gt;</code> follows the stored direction; <code>-</code> with no arrow matches either way.</li>
+      <li><code>(m)</code> with no label matches any node; <code>()</code> any node you do not need to name.</li>
+    </ul></div>
+    <div class="card"><span class="k">Three habits that save hours</span><ul class="list">
+      <li>A wrong label, type or direction is <b>not an error</b>: you get no rows and a warning.</li>
+      <li>Variables last for <b>one statement</b>. MATCH existing nodes before you CREATE relationships to them.</li>
+      <li>Within one MATCH a relationship is used <b>at most once</b>. A pattern that needs to walk the same relationship twice finds nothing; split it with WITH.</li>
+    </ul></div>
+  </div>
+  <figure class="figure explorer" data-explorer="patterns">
+    <div class="title"><span class="tagx">Explorer</span><h3>Pattern builder</h3><span class="badge b-emu">Cypher emulator</span></div>
+    <p class="caption">Choose a starting node and up to two hops. The Cypher is written for you, run on the university graph, and the matching part of the graph is drawn. Try reversing a direction.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-change" data-nav="Changing the graph">
+  <div class="sec-head"><span class="sec-num">A5</span><h3>Changing the graph</h3></div>
+  <div class="tbl"><table><thead><tr><th>Clause</th><th>Does</th><th>Watch out for</th></tr></thead><tbody>
+    <tr><td><code>CREATE</code></td><td>Always creates the nodes and relationships in the pattern.</td><td>Duplicates. Unbound variables create new, empty nodes.</td></tr>
+    <tr><td><code>MERGE</code></td><td>Matches the whole pattern; creates it only if it is not there. <code>ON CREATE SET</code> / <code>ON MATCH SET</code>.</td><td>It matches on every property you list: merge on the key, SET the rest.</td></tr>
+    <tr><td><code>SET</code> / <code>REMOVE</code></td><td>Change properties and labels: <code>SET n.p = v</code>, <code>SET n:Label</code>, <code>SET n.p = null</code> or <code>REMOVE n.p</code> removes.</td><td>Match precisely first: slide 54's <code>MATCH (n {name: …})</code> searches every node.</td></tr>
+    <tr><td><code>DELETE</code></td><td>Deletes relationships, or nodes that have none.</td><td>"Cannot delete node … still has relationships."</td></tr>
+    <tr><td><code>DETACH DELETE</code></td><td>Deletes nodes and all their relationships (slides 56-57).</td><td>Silently removes every connection: in Demo 5, seven registrations.</td></tr>
+    <tr><td><code>CREATE CONSTRAINT</code></td><td><code>FOR (m:Module) REQUIRE m.code IS UNIQUE</code>: refuses duplicates and adds an index.</td><td>Neo4j 3.x syntax (<code>ON … ASSERT</code>) no longer works.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="a-paths" data-nav="Paths and performance">
+  <div class="sec-head"><span class="sec-num">A6</span><h3>Paths, depth and why hops are cheap</h3></div>
+  <div class="prose">
+    <p><code>-[*1..3]-</code> follows one to three relationships; <code>shortestPath((a)-[*]-(b))</code> finds the fewest hops between two nodes. In SQL these need recursive queries, or one join per hop, written in advance.</p>
+    <p>Neo4j stores, in each node, direct references to its relationships (<b>index-free adjacency</b>). Following a relationship therefore costs about the same however large the database is; a join instead looks each value up in an index whose cost grows with the table. Slide 21's figures (RDBMS, 1,000 people: 2,000 ms; graph, 1,000 or 1,000,000 people: 2 ms) come from a vendor benchmark: read them as a shape, not as a promise.</p>
+  </div>
+  <figure class="figure explorer" data-explorer="hops">
+    <div class="title"><span class="tagx">Explorer</span><h3>Joins versus traversal as the data grows</h3><span class="badge b-sim">Simulation</span></div>
+    <p class="caption">A simple cost model of "friends of friends to depth d", counting the entries each approach must touch. The formulas are shown; real systems add caching, query planning and disk effects.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="a-when" data-nav="When to choose a graph">
+  <div class="sec-head"><span class="sec-num">A7</span><h3>When to choose a graph, and the query languages</h3></div>
+  <div class="grid2 two">
+    <div class="card"><span class="k">Choose a graph when</span><ul class="list">
+      <li>the questions are about connections, paths or neighbourhoods;</li>
+      <li>the depth is variable or unknown (fraud rings, supply chains, networks);</li>
+      <li>the schema changes often and relationships carry their own data;</li>
+      <li>you need recommendations or a knowledge graph.</li></ul></div>
+    <div class="card"><span class="k">Choose something else when</span><ul class="list">
+      <li>you aggregate whole tables (reporting, analytics): relational or columnar;</li>
+      <li>data arrives as a high-rate stream of measurements: time series (Week 3);</li>
+      <li>you store self-contained records read whole: documents (Week 2);</li>
+      <li>you need to scale writes across many servers: graphs are hard to partition.</li></ul></div>
+  </div>
+  <div class="tbl"><table><thead><tr><th>Language</th><th>Where from</th><th>Note</th></tr></thead><tbody>
+    <tr><td><b>Cypher</b></td><td>Neo4j; open as openCypher</td><td>Taught here; also runs on Memgraph, FalkorDB, Amazon Neptune and others.</td></tr>
+    <tr><td><b>GQL</b></td><td>ISO/IEC 39075:2024</td><td>The first ISO standard query language since SQL, largely based on Cypher.</td></tr>
+    <tr><td><b>Gremlin</b></td><td>Apache TinkerPop</td><td>A traversal language: step by step rather than pattern by pattern (slide 27).</td></tr>
+    <tr><td><b>SPARQL</b></td><td>W3C</td><td>For RDF triple stores and semantic data (Lecture 8).</td></tr>
+    <tr><td><b>GraphQL</b></td><td>Facebook, for APIs</td><td>Slide 26 lists it, but it is an API query language, not a graph database language: it asks a server for a shape of JSON.</td></tr>
+  </tbody></table></div>
+</section>
+
+<!-- ============================== B ============================== -->
+<div class="part" id="demo" data-nav="B · Watch the demo"><span class="letter">B</span><h2>Watch the demonstration</h2><p>Six demonstrations in Cypher, from the lecture's first CREATE to paths across the university.</p></div>
+
+<section id="b-demos" data-nav="Demonstration library">
+  <div class="prose"><p>Each demonstration opens in presenter mode. Follow along in Neo4j Browser. Demos 3-6 use the university graph: paste <a href="../data/university/university_graph.cypher">university_graph.cypher</a> into Browser and run it (it deletes everything first, then rebuilds). Outputs are shown as cypher-shell prints them, which is also Browser's <b>Text</b> view.</p></div>
+  <div class="demos" data-demolist="neo4j"></div>
+</section>
+
+<!-- ============================== C ============================== -->
+<div class="part" id="explore" data-nav="C · Explore"><span class="letter">C</span><h2>Explore interactively</h2><p>A Cypher playground with a graph view, and a phrasebook from SQL.</p></div>
+
+<section id="c-playground" data-nav="Cypher playground">
+  <div class="sec-head"><span class="sec-num">C1</span><h3>Cypher playground</h3></div>
+  <figure class="figure explorer" data-explorer="cplayground">
+    <div class="title"><span class="tagx">Playground</span><h3>Run Cypher in your browser</h3><span class="badge b-emu">Cypher emulator</span></div>
+    <p class="caption">The university graph is loaded. Statements end with ; and run in order. Supported: MATCH, OPTIONAL MATCH, WHERE, CREATE, MERGE, SET, REMOVE, DELETE, DETACH DELETE, WITH, UNWIND, RETURN with ORDER BY / SKIP / LIMIT / DISTINCT, aggregation, variable-length patterns, shortestPath, CASE, list comprehensions, uniqueness constraints and db.labels(). Not supported: APOC, GDS algorithms, LOAD CSV, CALL subqueries, temporal types (store dates as text). It forgets everything when the page reloads.</p>
+    <div class="body"></div>
+  </figure>
+</section>
+
+<section id="c-phrase" data-nav="SQL to Cypher phrasebook">
+  <div class="sec-head"><span class="sec-num">C2</span><h3>SQL to Cypher phrasebook</h3></div>
+  <p class="prose">The same questions about the university, asked of MySQL (Week 1) and of the graph. Joins become patterns; link tables become relationships.</p>
+  <div style="display:flex;flex-direction:column;gap:12px"><div class="card"><span class="k">Filter and sort</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT Forename, Surname FROM Student
+WHERE CourseCode = &#x27;MSCDS&#x27;
+ORDER BY StudentID;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (s:Student)-[:ENROLLED_ON]-&gt;(:Course {code: &#x27;MSCDS&#x27;})
+RETURN s.name
+ORDER BY s.id;</pre></div></div></div><p class="note">The course is a node, not a column: the filter becomes part of the pattern.</p><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">Count missing values</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT COUNT(*) FROM Student WHERE Mobile IS NULL;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (s:Student) WHERE s.mobile IS NULL
+RETURN count(*);</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">JOIN through a link table</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT s.StudentID FROM Student s
+JOIN Registration r ON r.StudentID = s.StudentID
+WHERE r.ModuleCode = &#x27;COM748&#x27;
+ORDER BY s.StudentID;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (s:Student)-[:REGISTERED_ON]-&gt;(:Module {code: &#x27;COM748&#x27;})
+RETURN s.id ORDER BY s.id;</pre></div></div></div><p class="note">The Registration table is the REGISTERED_ON relationship.</p><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">Two joins</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT m.ModuleCode, l.Forename, l.Surname
+FROM Module m JOIN Lecturer l ON l.LecturerID = m.LecturerID
+ORDER BY m.ModuleCode;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (l:Lecturer)-[:TEACHES]-&gt;(m:Module)
+RETURN m.code, l.name ORDER BY m.code;</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">GROUP BY</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT CourseCode, COUNT(*) FROM Student
+GROUP BY CourseCode ORDER BY CourseCode;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (s:Student)-[:ENROLLED_ON]-&gt;(c:Course)
+RETURN c.code, count(s) ORDER BY c.code;</pre></div></div></div><p class="note">No GROUP BY: every column that is not an aggregate is a grouping key.</p><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">LEFT JOIN and COUNT(column)</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT m.ModuleCode, COUNT(r.StudentID) AS students
+FROM Module m LEFT JOIN Registration r ON r.ModuleCode = m.ModuleCode
+GROUP BY m.ModuleCode ORDER BY m.ModuleCode;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (m:Module)
+OPTIONAL MATCH (s:Student)-[:REGISTERED_ON]-&gt;(m)
+RETURN m.code, count(s) AS students ORDER BY m.code;</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">NOT EXISTS</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT s.StudentID, s.Forename FROM Student s
+WHERE NOT EXISTS (SELECT 1 FROM Registration r
+                  WHERE r.StudentID = s.StudentID);</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (s:Student)
+WHERE NOT (s)-[:REGISTERED_ON]-&gt;()
+RETURN s.id, s.name;</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">HAVING</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT ModuleCode, COUNT(*) AS n FROM Registration
+GROUP BY ModuleCode HAVING COUNT(*) &gt;= 6
+ORDER BY ModuleCode;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (:Student)-[:REGISTERED_ON]-&gt;(m:Module)
+WITH m, count(*) AS n WHERE n &gt;= 6
+RETURN m.code, n ORDER BY m.code;</pre></div></div></div><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div><div class="card"><span class="k">Self-join: classmates</span><div class="grid2 two"><div><div class="code" data-lang="sql"><pre>SELECT DISTINCT o.StudentID
+FROM Registration me
+JOIN Registration o ON o.ModuleCode = me.ModuleCode
+                   AND o.StudentID &lt;&gt; me.StudentID
+WHERE me.StudentID = 1004
+ORDER BY o.StudentID;</pre></div></div><div><div class="code" data-lang="cypher"><pre>MATCH (:Student {id: 1004})-[:REGISTERED_ON]-&gt;(:Module)
+      &lt;-[:REGISTERED_ON]-(o:Student)
+RETURN DISTINCT o.id ORDER BY o.id;</pre></div></div></div><p class="note">A self-join in SQL; in Cypher, out to the module and back in.</p><div class="controls"><button type="button" class="btn" data-try-cypher>Run the Cypher in the playground</button></div></div></div><p class="note">Checked: each pair returns the same values from MySQL 8.0.46 and from the Cypher emulator (9 of 9); FalkorDB, a separate graph database, agrees on 8 of 9 (the others differ only because FalkorDB lets one pattern reuse a relationship, which Neo4j does not).</p>
+</section>
+
+<!-- ============================== D ============================== -->
+<div class="part" id="practise" data-nav="D · Practise"><span class="letter">D</span><h2>Practise</h2><p>Short exercises on the university graph. Try them in the playground first.</p></div>
+<section id="d-tasks" data-nav="Practice exercises">
+  <div class="tier t-core"><div class="tier-head"><span class="tag">Core</span><span class="note">Patterns and filters (Demos 3-4)</span></div><ol class="tasks">
+<li class="task" id="g1"><div class="task-q"><span class="num">G1</span><span>Which modules does the MSc Data Science course include? Show code and name.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (:Course {code: &#x27;MSCDS&#x27;})-[:INCLUDES]-&gt;(m:Module)
+RETURN m.code, m.name ORDER BY m.code;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (:Course {code: &#x27;MSCDS&#x27;})-[:INCLUDES]-&gt;(m:Module) …
++----------+-------------------------------------+
+| m.code   | m.name                              |
++----------+-------------------------------------+
+| &quot;COM745&quot; | &quot;Big Data and Infrastructure&quot;       |
+| &quot;COM747&quot; | &quot;Data Science and Machine Learning&quot; |
+| &quot;COM750&quot; | &quot;Artificial Intelligence&quot;           |
+| &quot;COM760&quot; | &quot;Masters Project&quot;                   |
++----------+-------------------------------------+
+
+4 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div></details></li>
+<li class="task" id="g2"><div class="task-q"><span class="num">G2</span><span>Which students registered for a module in Semester 2, and on which module?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (s:Student)-[r:REGISTERED_ON]-&gt;(m:Module)
+WHERE r.semester = &#x27;Semester 2&#x27;
+RETURN s.name, m.code ORDER BY s.name;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (s:Student)-[r:REGISTERED_ON]-&gt;(m:Module) …
++--------+--------+
+| s.name | m.code |
++--------+--------+
++--------+--------+
+
+0 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div><p class="note">A condition on a relationship property: the Registration columns of Week 1 now live on the relationship.</p></details></li>
+<li class="task" id="g3"><div class="task-q"><span class="num">G3</span><span>How many students are enrolled on each course? Largest first.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (s:Student)-[:ENROLLED_ON]-&gt;(c:Course)
+RETURN c.code, count(s) AS students ORDER BY students DESC;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (s:Student)-[:ENROLLED_ON]-&gt;(c:Course) …
++----------+----------+
+| c.code   | students |
++----------+----------+
+| &quot;MSCCST&quot; | 12       |
+| &quot;MSCDS&quot;  | 7        |
+| &quot;BSCCS&quot;  | 5        |
++----------+----------+
+
+3 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div></details></li>
+</ol></div>
+<div class="tier t-chal"><div class="tier-head"><span class="tag">Challenge</span><span class="note">Several hops and aggregation (Demos 4-6)</span></div><ol class="tasks">
+<li class="task" id="g4"><div class="task-q"><span class="num">G4</span><span>Which lecturers both coordinate a course and teach a module that course includes? Show lecturer, course and module.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (l:Lecturer)-[:COORDINATES]-&gt;(c:Course)-[:INCLUDES]-&gt;(m:Module)&lt;-[:TEACHES]-(l)
+RETURN l.name, c.code, m.code ORDER BY l.name, m.code;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (l:Lecturer)-[:COORDINATES]-&gt;(c:Course)-[:INCLUDES]-&gt;(m:Module)&lt;-[:TEACHES]-(l) …
++-----------------+----------+----------+
+| l.name          | c.code   | m.code   |
++-----------------+----------+----------+
+| &quot;Daniel Okafor&quot; | &quot;BSCCS&quot;  | &quot;COM748&quot; |
+| &quot;Laura Wilson&quot;  | &quot;MSCCST&quot; | &quot;COM750&quot; |
+| &quot;Laura Wilson&quot;  | &quot;MSCCST&quot; | &quot;COM760&quot; |
+| &quot;Mei Chen&quot;      | &quot;MSCDS&quot;  | &quot;COM747&quot; |
++-----------------+----------+----------+
+
+4 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div><p class="note">The same variable l at both ends closes a loop: the pattern only matches when it is the same lecturer.</p></details></li>
+<li class="task" id="g5"><div class="task-q"><span class="num">G5</span><span>Which pairs of modules are taken together by the most students?</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (m1:Module)&lt;-[:REGISTERED_ON]-(s:Student)-[:REGISTERED_ON]-&gt;(m2:Module)
+WHERE m1.code &lt; m2.code
+RETURN m1.code, m2.code, count(s) AS together
+ORDER BY together DESC, m1.code, m2.code;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (m1:Module)&lt;-[:REGISTERED_ON]-(s:Student)-[:REGISTERED_ON]-&gt;(m2:Module) …
++----------+----------+----------+
+| m1.code  | m2.code  | together |
++----------+----------+----------+
+| &quot;COM745&quot; | &quot;COM747&quot; | 2        |
+| &quot;COM745&quot; | &quot;COM746&quot; | 1        |
++----------+----------+----------+
+
+2 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div><p class="note">m1.code &lt; m2.code keeps each pair once. This is the core of &quot;students who took X also took Y&quot; recommendations.</p></details></li>
+<li class="task" id="g6"><div class="task-q"><span class="num">G6</span><span>Is there a module that no course includes, or a course with no students? Write one query for each.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (m:Module) WHERE NOT (:Course)-[:INCLUDES]-&gt;(m) RETURN m.code;
+MATCH (c:Course) WHERE NOT (:Student)-[:ENROLLED_ON]-&gt;(c) RETURN c.code;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (m:Module) WHERE NOT (:Course)-[:INCLUDES]-&gt;(m) RETURN m.code
++--------+
+| m.code |
++--------+
++--------+
+
+0 rows
+
+neo4j@neo4j&gt; MATCH (c:Course) WHERE NOT (:Student)-[:ENROLLED_ON]-&gt;(c) RETURN c.code
++--------+
+| c.code |
++--------+
++--------+
+
+0 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div><p class="note">Both return no rows: every module is in at least one course, and every course has students.</p></details></li>
+</ol></div>
+<div class="tier t-str"><div class="tier-head"><span class="tag">Stretch</span><span class="note">Recommendation and design</span></div><ol class="tasks">
+<li class="task" id="g7"><div class="task-q"><span class="num">G7</span><span>Recommend modules to Priya Patel: modules taken by students who share a module with her, that she does not take, ranked by how many such students take them.</span></div><details><summary>Check your answer</summary><div class="code" data-lang="cypher"><pre>MATCH (p:Student {name: &#x27;Priya Patel&#x27;})-[:REGISTERED_ON]-&gt;(:Module)&lt;-[:REGISTERED_ON]-(peer:Student)-[:REGISTERED_ON]-&gt;(rec:Module)
+WHERE NOT (p)-[:REGISTERED_ON]-&gt;(rec)
+RETURN rec.code, rec.name, count(DISTINCT peer) AS peers
+ORDER BY peers DESC, rec.code;</pre></div><div class="output emu"><div class="output-head"><span class="badge b-emu">Checked with a Cypher emulator</span></div><pre>neo4j@neo4j&gt; MATCH (p:Student {name: &#x27;Priya Patel&#x27;})-[:REGISTERED_ON]-&gt;(:Module)&lt;-[:REGISTERED_ON]-(peer:Student)-[:REGISTERED_ON]-&gt;(rec:Module) …
++----------+-------------------------------------+-------+
+| rec.code | rec.name                            | peers |
++----------+-------------------------------------+-------+
+| &quot;COM747&quot; | &quot;Data Science and Machine Learning&quot; | 2     |
+| &quot;COM746&quot; | &quot;Database Systems&quot;                  | 1     |
++----------+-------------------------------------+-------+
+
+2 rows</pre></div><div class="controls"><button type="button" class="btn" data-try-cypher>Try it in the playground</button></div><p class="note">Slide 18&#x27;s &quot;movies liked by my friends&quot;, for modules. Try writing it in SQL from Week 1: four joins and a NOT EXISTS.</p></details></li>
+<li class="task" id="g8"><div class="task-q"><span class="num">G8</span><span>The university wants to add timetabled sessions (a module, a room, a day and time, a lecturer) and record attendance. Sketch the nodes, relationships and properties. Which questions would this graph answer well, and what would you keep elsewhere?</span></div><details><summary>Check your answer</summary><pre class="console">One design: (:Session {day, start, end})-[:OF]-&gt;(:Module), (:Session)-[:IN]-&gt;(:Room {code, capacity}), (:Lecturer)-[:LEADS]-&gt;(:Session),
+(:Student)-[:ATTENDED {checkedInAt}]-&gt;(:Session).
+Good questions: which students share the most sessions (contact tracing), who attends sessions of modules they are not registered on, room clashes.
+Elsewhere: the attendance scans themselves as a time series (Week 3), if they arrive every few seconds; room bookings with strict rules in a relational database.</pre></details></li>
+</ol></div>
+</section>
+
+<!-- ============================== E ============================== -->
+<div class="part" id="independent" data-nav="E · Practicals"><span class="letter">E</span><h2>Complete independently</h2><p>Practicals 9 and 10, original task numbers, with setup and troubleshooting.</p></div>
+
+<section id="e-setup" data-nav="Setting up Neo4j">
+  <div class="sec-head"><span class="sec-num">E1</span><h3>Setting up Neo4j and Neo4j Browser</h3></div>
+  <ol class="list prose">
+    <li><b>Lab PCs</b>: start Neo4j from the Start menu (type "Neo4j"). In Neo4j Desktop, create or select a local database and click <b>Start</b>, then <b>Open</b> to launch Neo4j Browser. With the older server manager, click <b>Start</b> and open <a href="http://localhost:7474">http://localhost:7474</a>.</li>
+    <li><b>Your own laptop</b>: install <a href="https://neo4j.com/download/">Neo4j Desktop</a> (free; Windows, macOS, Linux). Add a local DBMS, set its password, start it and open Browser. Docker users: <code>docker run -p 7474:7474 -p 7687:7687 neo4j:5</code>.</li>
+    <li><b>Logging in</b>: user <code>neo4j</code>. On a fresh server the password is <code>neo4j</code> and you are asked to choose a new one straight away. Write it down.</li>
+    <li><b>Load the university graph</b>: in Browser open Settings (cog icon) and make sure <b>Enable multi statement query editor</b> is on, then paste the whole of <a href="../data/university/university_graph.cypher">university_graph.cypher</a> and run it. The last statement lists 3 courses, 6 lecturers, 6 modules and 24 students.</li>
+    <li><b>Keep a log</b> of each query and its result as you work through Practical 10. CW1 is open book and lab logs are allowed.</li>
+  </ol>
+</section>
+
+<section id="e-p9" data-nav="Practical 9">
+  <div class="sec-head"><span class="sec-num">E2</span><h3>Practical 9: Modelling data within graph databases</h3></div>
+  <div class="card"><span class="k">Scenario</span><p>A large online retailer which specialises in retailing films would like to model information about films. Specifically, the retailer would like to store information about films, actors, producers, writers and publishers. Information about people in the database should cover their full name, as a single field, and the year they were born. Films should be stored along with their title, the year they were released and the tagline.</p></div>
+<p class="prose">Graph databases are best suited to modelling and querying the interrelationships between entities. They are optimised for this in their data structure and query language, but these optimisations bring limitations that may limit their usefulness.</p>
+<ol class="tasks">
+<li class="task" data-key="P9-T0"><div class="task-q"><span class="num">T0</span><span>Identify some limitations introduced by graph databases. How are these introduced by optimisations?</span></div><details><summary>Hint</summary><p>Think about what index-free adjacency (each node pointing straight to its relationships) makes cheap, and what it makes expensive: scanning every node to sum a property, splitting a graph across many servers, very high-rate writes, enforcing a schema.</p></details></li>
+<li class="task" data-key="P9-T1"><div class="task-q"><span class="num">T1</span><span>Using pen and paper (recommended) or software, conceptualise how a graph covering the scenario would be modelled. Incorporate all potential links: for example, a person may act in, write and direct a movie.</span></div><details><summary>Hint</summary><p>Draw circles for node labels and arrows for relationship types. Is &quot;actor&quot; a kind of node, or a relationship a Person has with a Movie? Where does &quot;the role played&quot; belong? Is a publisher a Person?</p></details></li>
+<li class="task" data-key="P9-T2"><div class="task-q"><span class="num">T2</span><span>What other roles could graph databases have in a larger big data platform? For example, a probabilistic text-mining platform that identifies interactions between people, or a platform that processes mass financial transactions to identify fraud.</span></div><details><summary>Hint</summary><p>Slides 15-25 (recommendations, knowledge graphs). For fraud: shared phone numbers, devices or addresses linking accounts into rings. For text mining: people as nodes, co-mentions as weighted relationships.</p></details></li>
+<li class="task" data-key="P9-T3"><div class="task-q"><span class="num">T3</span><span>Extending from T2, identify some database types which would complement a graph database to optimally store data in both scenarios.</span></div><details><summary>Hint</summary><p>Where would the raw documents live? The stream of transactions over time? The customer master records? You have met document, time-series and relational databases in Weeks 1-3; Hadoop comes in Week 6.</p></details></li>
+</ol>
+</section>
+
+<section id="e-p10" data-nav="Practical 10">
+  <div class="sec-head"><span class="sec-num">E3</span><h3>Practical 10: Querying Neo4j</h3></div>
+  <p class="prose">Neo4j is queried with Cypher, an open, SQL-like language originally developed for Neo4j and now used by several graph databases. Neo4j serves a web interface, Neo4j Browser, on port 7474: http://localhost:7474 once the server is running.</p>
+<div class="grid2 two"><div class="tbl"><table><caption>T6: who played whom</caption><thead><tr><th>Actor</th><th>Role</th><th>Movie</th></tr></thead><tbody><tr><td>Steven Seagal</td><td>Casey Ryback</td><td>Under Siege</td></tr><tr><td>Steven Seagal</td><td>Forrest Taft</td><td>On Deadly Ground</td></tr><tr><td>Michael Caine</td><td>Alfred</td><td>Batman Begins</td></tr><tr><td>Michael Caine</td><td>Alfred</td><td>The Dark Knight</td></tr><tr><td>Michael Caine</td><td>Michael Jennings</td><td>On Deadly Ground</td></tr><tr><td>Gary Busey</td><td>Commander Krill</td><td>Under Siege</td></tr></tbody></table></div><div class="tbl"><table><caption>T8: who directed what</caption><thead><tr><th>Director</th><th>Movie</th></tr></thead><tbody><tr><td>Chris Nolan</td><td>Batman Begins</td></tr><tr><td>Chris Nolan</td><td>The Dark Knight</td></tr><tr><td>Chris Nolan</td><td>Under Siege</td></tr><tr><td>Steven Seagal</td><td>On Deadly Ground</td></tr></tbody></table></div></div><p class="note">Names corrected from the original sheet: Steven Seagal (sheet: "Stephen Segal"), Casey Ryback (sheet: "Kasey Rybeck"). The sheet numbers two tasks T12; the second is shown as T12 (2nd).</p>
+<ol class="tasks">
+<li class="task" data-key="P10-T0"><div class="task-q"><span class="num">T0</span><span>Read the introduction to Cypher in the Cypher manual, and keep the lecture slides to hand. <a href="https://neo4j.com/docs/cypher-manual/current/">Cypher manual (current)</a></span></div><details><summary>Hint</summary><p>The original sheet links the 3.2 manual, which is out of date (for example its constraint syntax no longer works). The Introduction and the MATCH, CREATE, SET and DELETE clause pages are enough.</p></details></li>
+<li class="task" data-key="P10-T1"><div class="task-q"><span class="num">T1</span><span>Start the Neo4j server and open Neo4j Browser at http://localhost:7474. Close the getting-started guide and examine the query interface. The username and password are both neo4j at first.</span></div><details><summary>Hint</summary><p>Neo4j asks you to choose a new password at the first login: write it down, it is not neo4j any more. Lab PCs: start Neo4j from the Start menu (see E1).</p></details></li>
+<li class="task" data-key="P10-T2"><div class="task-q"><span class="num">T2</span><span>Store the full name, year of birth and some trivia for four people: Gary Busey, Steven Seagal (spelled &quot;Stephen Segal&quot; on the original sheet), Michael Caine and Christopher Nolan. Take the trivia from their IMDb profiles.</span></div><details><summary>Hint</summary><p>One CREATE can make several nodes: CREATE (a:Person {…}), (b:Person {…}). Store the year as a number, not a string. Demo 2 shows the lecture&#x27;s Gary Busey node and what goes wrong without a label.</p></details></li>
+<li class="task" data-key="P10-T3"><div class="task-q"><span class="num">T3</span><span>Store the title, year of release, IMDb rating and tagline for four movies: On Deadly Ground, Under Siege, The Dark Knight and Batman Begins.</span></div><details><summary>Hint</summary><p>Use the property names the T16 movie graph uses (title, released, tagline) and a label such as Movie. Ratings are decimals: 6.4, not &#x27;6.4&#x27;.</p></details></li>
+<li class="task" data-key="P10-T4"><div class="task-q"><span class="num">T4</span><span>Christopher Nolan now wishes to be known as &quot;Chris Nolan&quot;. Using Cypher, update his name.</span></div><details><summary>Hint</summary><p>MATCH him by label and property, then SET. Demo 2, last step.</p></details></li>
+<li class="task" data-key="P10-T5"><div class="task-q"><span class="num">T5</span><span>Visualise your current graph by running MATCH p=()--&gt;() RETURN p. Explore the graph, table, text and code views.</span></div><details><summary>Hint</summary><p>Before you run it: how many relationships does your graph have yet? If the result is empty, MATCH (n) RETURN n shows the nodes.</p></details></li>
+<li class="task" data-key="P10-T6"><div class="task-q"><span class="num">T6</span><span>Model the relationships between people acting in movies and the roles they played, using the table above.</span></div><details><summary>Hint</summary><p>One ACTED_IN relationship per actor and movie, with the role(s) as a property. MATCH the person and the movie in the same statement as the CREATE, or you will get blank nodes (Demo 1).</p></details></li>
+<li class="task" data-key="P10-T7"><div class="task-q"><span class="num">T7</span><span>Visualise your current graph. Have the relationships been modelled appropriately? If not, consult the Cypher documentation and try again.</span></div><details><summary>Hint</summary><p>Look for extra, empty nodes (a sign the variables were not bound) and arrows pointing the wrong way.</p></details></li>
+<li class="task" data-key="P10-T8"><div class="task-q"><span class="num">T8</span><span>Model the directors of movies, using the second table above.</span></div><details><summary>Hint</summary><p>A DIRECTED relationship from the Person to the Movie. Chris Nolan is the new name from T4. (One row of the table is wrong on purpose: T15 deals with it.)</p></details></li>
+<li class="task" data-key="P10-T9"><div class="task-q"><span class="num">T9</span><span>Visualise the graph in its current state.</span></div><details><summary>Hint</summary><p>Steven Seagal now has two kinds of relationship. Drag his node to see them.</p></details></li>
+<li class="task" data-key="P10-T10"><div class="task-q"><span class="num">T10</span><span>Use Cypher to select all the movies that have had Michael Caine as an actor.</span></div><details><summary>Hint</summary><p>One pattern from the person to the movies.</p></details></li>
+<li class="task" data-key="P10-T11"><div class="task-q"><span class="num">T11</span><span>Use Cypher to select the directors of movies that Michael Caine has appeared in.</span></div><details><summary>Hint</summary><p>Extend the T10 pattern with a second relationship. Do you need DISTINCT?</p></details></li>
+<li class="task" data-key="P10-T12"><div class="task-q"><span class="num">T12</span><span>Use Cypher to select all movies that have been directed by the directors of movies that Michael Caine has appeared in. This should select all movies directed by Chris Nolan and Steven Seagal, but the names must not be hard-coded.</span></div><details><summary>Hint</summary><p>Extend T11 by one more hop out of the director. Only Michael Caine&#x27;s name appears in the query. If one long pattern misses a film, remember that a single MATCH never uses the same relationship twice: WITH lets you start a second MATCH from the directors you found.</p></details></li>
+<li class="task" data-key="P10-T12(2nd)"><div class="task-q"><span class="num">T12 (2nd)</span><span>Gary Busey also played &quot;Miss July 1989&quot; in Under Siege. Update your graph to reflect that. (The original sheet numbers this task T12 as well.)</span></div><details><summary>Hint</summary><p>Slides 36-38: two relationships, or one relationship whose roles list has two entries? List properties can be extended with +.</p></details></li>
+<li class="task" data-key="P10-T13"><div class="task-q"><span class="num">T13</span><span>Use Cypher to select a list of all roles that have appeared in movies directed by Christopher Nolan.</span></div><details><summary>Hint</summary><p>His name is now Chris Nolan (T4). If roles is a list, UNWIND turns it into rows; collect() turns rows back into one list.</p></details></li>
+<li class="task" data-key="P10-T14"><div class="task-q"><span class="num">T14</span><span>Use Cypher to select the names of all actors who have worked as actors beside the people who directed the movies Michael Caine acted in. This should be Steven Seagal and Gary Busey, without hard-coding them.</span></div><details><summary>Hint</summary><p>Read the sentence as a path: Caine, his movies, their directors, the movies those directors directed, the actors in them. Who should be excluded?</p></details></li>
+<li class="task" data-key="P10-T15"><div class="task-q"><span class="num">T15</span><span>Chris Nolan did not direct Under Siege: delete this record. How does this affect your queries?</span></div><details><summary>Hint</summary><p>Delete the relationship, not a node (Demo 5). Then run T12, T13 and T14 again and explain each change.</p></details></li>
+<li class="task" data-key="P10-T16"><div class="task-q"><span class="num">T16</span><span>Neo4j provides an interactive guide to building a similar movie database: run :play movie-graph in Neo4j Browser and work through it to see where you could improve your own solution.</span></div><details><summary>Hint</summary><p>Newer versions of Browser call it :guide movie-graph. Compare its model with yours: it uses one ACTED_IN per actor and movie with a roles list, and separate DIRECTED, PRODUCED and WROTE relationships.</p></details></li>
+</ol>
+  <p class="note" data-progress></p>
+</section>
+
+<section id="e-trouble" data-nav="Troubleshooting">
+  <div class="sec-head"><span class="sec-num">E4</span><h3>Troubleshooting</h3></div>
+  <div class="tbl"><table><thead><tr><th>You see</th><th>When</th><th>What to do</th></tr></thead><tbody><tr><td class="m">Neo.ClientError.Security.Unauthorized</td><td>Logging in</td><td>Wrong password. The first login with neo4j / neo4j forces a new password; use that one (or reset it in Neo4j Desktop).</td></tr><tr><td class="m">ServiceUnavailable / WebSocket connection failure</td><td>Browser</td><td>The database is not started. Start it in Neo4j Desktop (or run neo4j console), then reconnect to neo4j://localhost:7687.</td></tr><tr><td class="m">Only the first statement ran</td><td>Loading a script</td><td>Turn on Settings &gt; &quot;Enable multi statement query editor&quot; in Browser, or run the file with cypher-shell -f.</td></tr><tr><td class="m">Added 2 nodes when you only wanted a relationship</td><td>CREATE</td><td>Variables do not survive between statements: MATCH the existing nodes in the same statement, then CREATE.</td></tr><tr><td class="m">Variable `n` not defined</td><td>Any query</td><td>A name used in RETURN, WHERE or SET that no pattern introduced. Check the spelling.</td></tr><tr><td class="m">No rows, and a warning about a missing label or relationship type</td><td>MATCH</td><td>A typo (ACTED_ID for ACTED_IN), wrong case (person for Person), or the wrong direction. Neo4j warns rather than failing.</td></tr><tr><td class="m">Invalid input &#x27;‘&#x27;</td><td>Pasted code</td><td>Curly quotes from slides or Word. Retype as straight quotes.</td></tr><tr><td class="m">Only directed relationships are supported in CREATE</td><td>CREATE</td><td>Give the relationship a direction: -[:R]-&gt; or &lt;-[:R]-.</td></tr><tr><td class="m">Cannot delete node&lt;N&gt;, because it still has relationships</td><td>DELETE</td><td>Delete the relationships first, or use DETACH DELETE.</td></tr><tr><td class="m">Node(N) already exists with label … and property …</td><td>CREATE / SET</td><td>A uniqueness constraint blocked a duplicate. MERGE to reuse the existing node.</td></tr><tr><td class="m">Invalid constraint syntax, ON and ASSERT should not be used</td><td>Constraints</td><td>Old 3.x syntax: use CREATE CONSTRAINT name FOR (n:Label) REQUIRE n.prop IS UNIQUE.</td></tr><tr><td class="m">The property existence syntax `... exists(variable.property)` is no longer supported</td><td>WHERE</td><td>Neo4j 5: write n.prop IS NOT NULL.</td></tr><tr><td class="m">A query returns a film too few</td><td>Long patterns</td><td>One MATCH never uses the same relationship twice. Split the pattern with WITH and a second MATCH.</td></tr></tbody></table></div>
+</section>
+
+<section id="e-more" data-nav="More examples">
+  <div class="sec-head"><span class="sec-num">E5</span><h3>More examples for home study</h3></div>
+  <div class="grid2">
+    <div class="card"><span class="k">Load a CSV file</span><p>Neo4j reads CSV files from its import folder (Neo4j Desktop: … &gt; Open folder &gt; Import):</p>
+      <div class="code" data-lang="cypher"><pre>LOAD CSV WITH HEADERS FROM 'file:///students.csv' AS row
+MERGE (s:Student {id: toInteger(row.StudentID)})
+SET s.name = row.Forename + ' ' + row.Surname;</pre></div></div>
+    <div class="card"><span class="k">From Python</span><p>The official driver, <code>pip install neo4j</code>:</p>
+      <div class="code" data-lang="python"><pre>from neo4j import GraphDatabase
+drv = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'your-password'))
+rows, _, _ = drv.execute_query(
+    "MATCH (s:Student)-[:REGISTERED_ON]->(m:Module {code: $code}) RETURN s.name AS name",
+    code='COM745')
+print([r['name'] for r in rows])</pre></div></div>
+    <div class="card"><span class="k">Graph algorithms</span><p>The Graph Data Science library adds PageRank, community detection and similarity, used for fraud scoring and recommendations. In Neo4j Desktop: install the GDS plugin on your database, then for example <code>CALL gds.pageRank.stream(…)</code>.</p></div>
+    <div class="card"><span class="k">The movie graph</span><p><code>:play movie-graph</code> (newer Browsers: <code>:guide movie-graph</code>) builds a larger version of the Practical 10 database, with ACTED_IN, DIRECTED, PRODUCED, WROTE and REVIEWED. Compare its model with yours (Practical 10 T16).</p></div>
+  </div>
+</section>
+
+<!-- ============================== F ============================== -->
+<div class="part" id="check" data-nav="F · Check"><span class="letter">F</span><h2>Check your understanding</h2><p>Quiz, reflection, misconceptions and key terms.</p></div>
+
+<section id="f-quiz" data-nav="Quiz">
+  <div class="sec-head"><span class="sec-num">F1</span><h3>Quiz</h3></div>
+  <div class="quiz" data-quiz="neo4j"></div>
+</section>
+
+<section id="f-reflect" data-nav="Reflect">
+  <div class="sec-head"><span class="sec-num">F2</span><h3>Reflect and discuss</h3></div>
+  <ul class="list prose">
+    <li>Write "students who share a module with Priya, and the other modules they take" in SQL against Week 1's tables. Count the joins. Then compare with Practice G7.</li>
+    <li>Your Practical 9 design and a classmate's differ. Which questions does each answer with the shortest pattern?</li>
+    <li>Slide 58: what is the major advantage of a graph database over an RDBMS, a time-series database and a document database? And the major disadvantage of each comparison?</li>
+    <li>For CW2: is there a network hidden in your dataset (people, places, organisations, citations)? What would the nodes and relationships be?</li>
+  </ul>
+</section>
+
+<section id="f-mis" data-nav="Misconceptions">
+  <div class="sec-head"><span class="sec-num">F3</span><h3>Common misconceptions</h3></div>
+  <div class="tbl"><table><thead><tr><th>Students often say…</th><th>Correct it to…</th></tr></thead><tbody>
+    <tr><td>"Relational databases are about relationships."</td><td>"Relational" refers to relations, the mathematical name for tables. Connections between rows are computed with joins; a graph database stores them.</td></tr>
+    <tr><td>"No rows means the data is not there."</td><td>Usually a typo in a label or type, the wrong case, or an arrow pointing the wrong way. Read the warning.</td></tr>
+    <tr><td>"CREATE (a)-[:R]->(b) links my existing a and b."</td><td>Only if a and b were bound by a MATCH in the same statement; otherwise it creates two new, empty nodes.</td></tr>
+    <tr><td>"An actor is a kind of node."</td><td>Acting is a relationship between a Person and a Movie; the same person can also direct.</td></tr>
+    <tr><td>"Graphs are faster at everything."</td><td>They are faster at following connections. Whole-table aggregation, high-rate writes and scaling out are weaker.</td></tr>
+    <tr><td>"MERGE never creates duplicates."</td><td>MERGE matches the whole pattern you write. A different property value in the pattern means "not found", so it creates another node.</td></tr>
+    <tr><td>"A schema-free graph needs no design."</td><td>Labels, types, directions and what becomes a node decide which questions are easy. Constraints add the rules the database will not assume.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="lo-map" data-nav="Learning outcomes and CW1">
+  <div class="sec-head"><span class="sec-num">F4</span><h3>What this topic counts towards</h3></div>
+  <div class="tbl"><table><thead><tr><th>Module outcome</th><th>How this topic builds it</th><th>Assessed</th></tr></thead><tbody>
+    <tr><td><b>LO1</b> Understand big data and how storage paradigms address it</td><td>The property graph model, Cypher, and the graph use cases</td><td>CW1 (Week 7, 9 Nov): graph databases are a listed topic. Open book: lab logs allowed.</td></tr>
+    <tr><td><b>LO2</b> Appraise paradigms and when to apply them</td><td>Strengths and limits of graphs; polyglot platforms (Practical 9 T2-T3)</td><td>CW2 technology justification</td></tr>
+    <tr><td><b>LO4</b> Apply skills to data in a range of paradigms</td><td>Querying connected data with patterns</td><td>CW2 analysis</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="f-gloss" data-nav="Key terms">
+  <div class="sec-head"><span class="sec-num">F5</span><h3>Key terms</h3></div>
+  <dl class="gloss"><dt id="gg-cypher">Cypher</dt><dd>Neo4j&#x27;s declarative graph query language, now also used by other graph databases (openCypher).</dd><dt id="gg-detach-delete">DETACH DELETE</dt><dd>Delete nodes together with all their relationships.</dd><dt id="gg-gql">GQL</dt><dd>ISO/IEC 39075:2024, the international standard graph query language, closely based on Cypher.</dd><dt id="gg-index-free-adjacency">Index-free adjacency</dt><dd>Each node stores direct references to its relationships, so following one costs the same however big the graph is.</dd><dt id="gg-label">Label</dt><dd>A tag that groups nodes by kind (Student, Module). A node can have several.</dd><dt id="gg-merge">MERGE</dt><dd>Match a whole pattern, or create it if it does not exist.</dd><dt id="gg-node">Node</dt><dd>An entity in the graph: a person, a module, a film.</dd><dt id="gg-optional-match">OPTIONAL MATCH</dt><dd>Like MATCH, but keeps the row with nulls when the pattern is not found (the LEFT JOIN of Cypher).</dd><dt id="gg-path">Path</dt><dd>A sequence of nodes joined by relationships; length = number of relationships.</dd><dt id="gg-pattern">Pattern</dt><dd>ASCII-art description of nodes and relationships to find: (a:Student)-[:REGISTERED_ON]-&gt;(m:Module).</dd><dt id="gg-property">Property</dt><dd>A key-value pair on a node or a relationship.</dd><dt id="gg-property-graph">Property graph</dt><dd>The data model of Neo4j: nodes and relationships, both with properties; nodes have labels, relationships have a type and direction.</dd><dt id="gg-relationship">Relationship</dt><dd>A named, directed connection between two nodes (an edge). Always has exactly one type.</dd><dt id="gg-relationship-uniqueness">Relationship uniqueness</dt><dd>Within one MATCH, a relationship is used at most once, so patterns do not walk back along the edge they came in on.</dd><dt id="gg-uniqueness-constraint">Uniqueness constraint</dt><dd>A rule that no two nodes with a label share a property value; also creates an index.</dd><dt id="gg-variable-length-pattern">Variable-length pattern</dt><dd>-[*1..3]-: follow between one and three relationships.</dd></dl>
+</section>
+
+<section id="f-exit" data-nav="Exit self-check">
+  <div class="sec-head"><span class="sec-num">F6</span><h3>Exit self-check</h3></div>
+  <div class="rate">
+    <div class="rate-row" data-key="model"><span>I can name the nodes, labels, relationships and properties in a graph.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="design"><span>I can turn a scenario into a graph model and justify my choices.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="crud"><span>I can create, match, update and delete with CREATE, MATCH, MERGE, SET and DETACH DELETE.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="query"><span>I can write multi-hop patterns with OPTIONAL MATCH, aggregation, WITH and shortestPath.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+    <div class="rate-row" data-key="choose"><span>I can say when a graph database suits a problem, and what to pair it with.</span><div class="btns"><button type="button" data-v="1">Not yet</button><button type="button" data-v="2">Nearly</button><button type="button" data-v="3">Yes</button></div></div>
+  </div>
+</section>
+
+<nav class="pager" aria-label="Topic navigation">
+  <a href="influxdb.html"><span class="k">Previous · Week 3</span>InfluxDB</a>
+  <a class="nx" href="../index.html#weeks"><span class="k">Next · Week 5</span>GDPR, cloud and database review (coming soon)</a>
+</nav>
+</main>
+<footer class="site-foot"><span>COM745 Big Data and Infrastructure · 2026/27</span><span>Synthetic data only. Neo4j outputs: emulator-checked against FalkorDB, not yet run on Neo4j.</span></footer>
+</div>
+</div>
+<script src="../assets/js/schedule.js"></script>
+<script src="../assets/js/search-index.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/cypher-engine.js"></script>
+<script src="../assets/js/neo4j-data.js"></script>
+<script src="../assets/js/demos-neo4j.js"></script>
+<script src="../assets/js/neo4j-content.js"></script>
+<script src="../assets/js/neo4j.js"></script>
+</body>
+</html>
